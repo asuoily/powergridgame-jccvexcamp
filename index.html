@@ -879,7 +879,8 @@ function defaultState(){
     scoringConfig:{lowerSwitch:2, upperSwitch:4, orbBattery:6, orbCapacitor:10, climb:15, terminalBall:1},
     rpConfig:{win:2, loss:0, tie:1, powerShareBonus:2, doubleClimbBonus:2, orbBatteryBonus:1, orbCapacitorBonus:1, orbBatteryThreshold:4, orbCapacitorThreshold:4, byeFairnessBonus:1},
     matchConfig:{durationSec:120},
-    soundEnabled:true
+    soundEnabled:true,
+    easterEggConfig:{win:50, tie:50, breakTime:15, button:0.1}
   };
 }
 const STORAGE_KEY = 'fieldControl_powerGridV2_state';
@@ -899,6 +900,7 @@ function loadState(){
         parsed.scoringConfig = Object.assign({}, def.scoringConfig, parsed.scoringConfig||{});
         parsed.rpConfig = Object.assign({}, def.rpConfig, parsed.rpConfig||{});
         parsed.matchConfig = Object.assign({}, def.matchConfig, parsed.matchConfig||{});
+        parsed.easterEggConfig = Object.assign({}, def.easterEggConfig, parsed.easterEggConfig||{});
         if(typeof parsed.soundEnabled !== 'boolean') parsed.soundEnabled = def.soundEnabled;
         return parsed;
       }
@@ -1227,6 +1229,16 @@ function updateRPConfig(field, value){
   S.rpConfig[field] = v;
   saveState();
 }
+function eggEditRow(label, field, val){
+  return `<div class="rules-edit-row"><span>${label}</span><input type="number" min="0" max="100" step="0.1" class="rules-num-input" value="${val}" onchange="updateEggConfig('${field}',this.value)"><span class="rules-edit-unit">%</span></div>`;
+}
+function updateEggConfig(field, value){
+  let v = parseFloat(value);
+  if(isNaN(v) || v<0) v = 0;
+  if(v>100) v = 100;
+  S.easterEggConfig[field] = v;
+  saveState();
+}
 function onMatchDurationInput(v){
   S.matchConfig.durationSec = parseInt(v,10);
   const label = document.getElementById('matchDurationLabel'); if(label) label.textContent = fmtTime(S.matchConfig.durationSec);
@@ -1238,6 +1250,7 @@ function renderRulesPanel(){
   const c = S.scoringConfig;
   const r = S.rpConfig;
   const mc = S.matchConfig;
+  const egg = S.easterEggConfig;
   const durationFillPct = ((mc.durationSec - 30) / (600 - 30)) * 100;
   const scoredTotal = S.qualMatches.filter(m=>m.scored).length + (S.finals ? S.finals.matches.filter(m=>m.scored).length : 0);
   return `
@@ -1283,6 +1296,14 @@ function renderRulesPanel(){
     <p class="rules-note">Changes apply immediately to new and unscored matches. Matches that were already scored keep their original results — tap "Rescore" on a match card to recalculate it${scoredTotal>0 ? `, or <a href="#" onclick="event.preventDefault();rescoreAllMatches();" style="color:var(--gold);">Rescore All</a> to recalculate every scored match with the current values` : ' (once matches are scored, you\'ll be able to Rescore All here)'}.</p>
     <h4>Grand Finals</h4>
     <p>The top 2 ranked teams captain the two alliances and draft every other team between them (seed 1 picks first, then seed 2, alternating until everyone is on an alliance) — so every team competes in the Grand Finals. No ranking points — the first alliance to win 2 matches takes the title.</p>
+    <h4>Easter Egg Odds <span class="rules-edit-note">(tap a value to change it)</span></h4>
+    <div class="rules-edit-grid">
+      ${eggEditRow('Win egg (red/blue)','win',egg.win)}
+      ${eggEditRow('Tie egg','tie',egg.tie)}
+      ${eggEditRow('Break timer egg','breakTime',egg.breakTime)}
+      ${eggEditRow('Button click egg','button',egg.button)}
+    </div>
+    <p class="rules-note">"Win egg" and "Tie egg" are the chance that a special sound plays instead of the normal one when a match result is revealed. "Break timer egg" is the chance when you start the break timer. "Button click egg" rolls on every single button tap in the app, so keep it small — even 1% adds up fast over an event.</p>
   </div>`;
 }
 
@@ -2105,7 +2126,7 @@ function toggleBreakRun(){
     if(breakTimer.remainingSec<=0) breakTimer.remainingSec = breakTimer.totalSec;
     breakTimer.targetTs = Date.now() + breakTimer.remainingSec*1000;
     breakTimer.handle = setInterval(tickBreakTimer, 250);
-    if(Math.random() < EGG_CHANCE_BREAK) playOneShot(AUDIO_SRC.eggBreakTime, 0.9);
+    if(Math.random() < S.easterEggConfig.breakTime/100) playOneShot(AUDIO_SRC.eggBreakTime, 0.9);
   } else if(breakTimer.handle){
     clearInterval(breakTimer.handle); breakTimer.handle = null;
   }
@@ -2145,18 +2166,18 @@ function beep(){
 
 /* ============================= AUDIO ============================= */
 const AUDIO_SRC = { start:'MATCHSTART.mp3', end:'MATCHEND.mp3', music:'MATCHMUSIC.mp3', win:'MATCHWIN.wav', warn30:'MATCHWARN.wav',
-  eggRedWin:'EGG_REDWIN.wav', eggBlueWin:'EGG_BLUEWIN.wav', eggAreSure:'EGG_ARESURE.wav', eggBreakTime:'EGG_BREAKTIME.wav', eggTie:'EGG_TIE.wav' };
-// Easter egg odds: win/tie eggs are a fun surprise on a big moment, so they're common enough to
-// actually show up; the button one fires on every button click in the app, so it has to stay
-// very rare or it gets old fast.
-const EGG_CHANCE_WIN = 0.5;
-const EGG_CHANCE_BREAK = 0.15;
-const EGG_CHANCE_TIE = 0.5;
-const EGG_CHANCE_BUTTON = 0.001;
+  eggRedWin:'EGG_REDWIN.wav', eggBlueWin:'EGG_BLUEWIN.wav', eggAreSure:'EGG_ARESURE.wav', eggBreakTime:'EGG_BREAKTIME.wav', eggTie:'EGG_TIE.wav',
+  eggManipulate:'EGG_MANIPULATE.wav' };
+const BUTTON_EGG_CLIPS = ['eggAreSure', 'eggManipulate'];
+// Easter egg odds live in S.easterEggConfig (percentages, editable from the Scoring Rules panel)
+// so they persist and can be tuned without touching code. Values here are stored 0-100.
 document.addEventListener('click', function(e){
   const btn = e.target.closest('button');
   if(!btn) return;
-  if(Math.random() < EGG_CHANCE_BUTTON) playOneShot(AUDIO_SRC.eggAreSure, 0.7);
+  if(Math.random() < S.easterEggConfig.button/100){
+    const clip = BUTTON_EGG_CLIPS[Math.floor(Math.random()*BUTTON_EGG_CLIPS.length)];
+    playOneShot(AUDIO_SRC[clip], 0.7);
+  }
 }, true);
 
 /* ---------- IDLE MASCOT (Nyan Cat) ---------- */
@@ -2696,7 +2717,7 @@ function playHeartbeat(){
 }
 function triggerTieSpark(overlay){
   if(!overlay) return;
-  if(Math.random() < EGG_CHANCE_TIE){
+  if(Math.random() < S.easterEggConfig.tie/100){
     playOneShot(AUDIO_SRC.eggTie, 0.9);
   } else {
     playZapSound();
@@ -2830,7 +2851,7 @@ function renderRevealContent(m, teams, isFinal, pr){
   contentEl.style.opacity = '1';
   if(winner && winner!=='tie'){
     setTimeout(() => launchConfetti(winner, isChampionship), 60);
-    if(Math.random() < EGG_CHANCE_WIN){
+    if(Math.random() < S.easterEggConfig.win/100){
       playOneShot(winner==='red' ? AUDIO_SRC.eggRedWin : AUDIO_SRC.eggBlueWin, 0.9);
     } else {
       playOneShot(AUDIO_SRC.win, 0.9);
