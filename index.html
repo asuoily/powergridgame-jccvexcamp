@@ -2145,13 +2145,14 @@ function beep(){
 
 /* ============================= AUDIO ============================= */
 const AUDIO_SRC = { start:'MATCHSTART.mp3', end:'MATCHEND.mp3', music:'MATCHMUSIC.mp3', win:'MATCHWIN.wav', warn30:'MATCHWARN.wav',
-  eggRedWin:'EGG_REDWIN.wav', eggBlueWin:'EGG_BLUEWIN.wav', eggAreSure:'EGG_ARESURE.wav', eggBreakTime:'EGG_BREAKTIME.wav' };
-// Easter egg odds: win eggs are a fun surprise on a big moment, so they're common enough to
+  eggRedWin:'EGG_REDWIN.wav', eggBlueWin:'EGG_BLUEWIN.wav', eggAreSure:'EGG_ARESURE.wav', eggBreakTime:'EGG_BREAKTIME.wav', eggTie:'EGG_TIE.wav' };
+// Easter egg odds: win/tie eggs are a fun surprise on a big moment, so they're common enough to
 // actually show up; the button one fires on every button click in the app, so it has to stay
-// rare or it gets old fast.
-const EGG_CHANCE_WIN = 0.15;
+// very rare or it gets old fast.
+const EGG_CHANCE_WIN = 0.5;
 const EGG_CHANCE_BREAK = 0.15;
-const EGG_CHANCE_BUTTON = 0.02;
+const EGG_CHANCE_TIE = 0.5;
+const EGG_CHANCE_BUTTON = 0.001;
 document.addEventListener('click', function(e){
   const btn = e.target.closest('button');
   if(!btn) return;
@@ -2695,7 +2696,11 @@ function playHeartbeat(){
 }
 function triggerTieSpark(overlay){
   if(!overlay) return;
-  playZapSound();
+  if(Math.random() < EGG_CHANCE_TIE){
+    playOneShot(AUDIO_SRC.eggTie, 0.9);
+  } else {
+    playZapSound();
+  }
   const el = document.createElement('div');
   el.className = 'tie-spark-overlay';
   el.innerHTML = `<div class="tie-spark-flicker"></div><div class="tie-spark-text">⚡ SHORT CIRCUIT ⚡</div>`;
