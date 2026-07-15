@@ -698,6 +698,29 @@
     color:var(--text-dim);text-shadow:0 0 14px rgba(255,255,255,0.25);white-space:nowrap;
   }
 
+  /* ---------- TIE MATCH SPARK ---------- */
+  .tie-spark-overlay{position:absolute;inset:0;z-index:4;pointer-events:none;}
+  .tie-spark-flicker{position:absolute;inset:0;background:rgba(242,183,5,0.35);animation:tieFlicker 0.55s steps(2,end);}
+  .tie-spark-text{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;letter-spacing:0.22em;
+    color:var(--gold);text-shadow:0 0 16px var(--gold);white-space:nowrap;
+    animation:tieFlicker 0.55s steps(2,end);
+  }
+  @keyframes tieFlicker{
+    0%{opacity:0;} 15%{opacity:1;} 30%{opacity:0;} 45%{opacity:0.85;} 60%{opacity:0;} 75%{opacity:0.65;} 100%{opacity:0;}
+  }
+
+  /* ---------- CLOSE-GAME TENSION ---------- */
+  .overlay-shake{animation:overlayShake 0.5s ease;}
+  @keyframes overlayShake{
+    0%,100%{transform:translate(0,0);}
+    20%{transform:translate(-6px,3px);}
+    40%{transform:translate(5px,-4px);}
+    60%{transform:translate(-4px,-2px);}
+    80%{transform:translate(3px,4px);}
+  }
+
   /* ---------- CIRCUIT BREAKER REVEAL (Grand Finals championship) ---------- */
   .breaker-charge-stage{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
   .breaker-cell-grid{
@@ -783,6 +806,53 @@
   /* ---------- FOOTER ---------- */
   .app-footer{text-align:center;color:var(--text-faint);font-size:12px;padding:6px 0 30px;font-family:'Inter',sans-serif;}
   .app-footer .heart{color:var(--red);}
+
+  /* ---------- IDLE MASCOT ---------- */
+  .nyan-mascot{
+    position:fixed;top:22%;left:-170px;z-index:300;pointer-events:none;
+    display:flex;align-items:center;animation:nyanFly 7s linear forwards;
+  }
+  .nyan-trail{
+    width:130px;height:30px;margin-right:-6px;
+    background:repeating-linear-gradient(180deg,
+      #ff5a5a 0 5px, #ffb347 5px 10px, #f2e94e 10px 15px,
+      #6bdc6b 15px 20px, #4c8dff 20px 25px, #9b6bff 25px 30px);
+    opacity:0.9;clip-path:polygon(0 22%,100% 0,100% 100%,0 78%);
+    animation:nyanTrailWave 0.4s ease-in-out infinite alternate;
+  }
+  .nyan-body{
+    position:relative;width:54px;height:32px;flex:none;
+    background:repeating-linear-gradient(90deg,#ffb6d5 0 8px,#ff8fc1 8px 16px);
+    border-radius:7px;border:2px solid #d9558f;
+    box-shadow:0 0 12px rgba(255,140,190,0.55);
+    animation:nyanBob 0.4s ease-in-out infinite alternate;
+  }
+  .nyan-face{
+    position:absolute;right:-24px;top:-9px;width:34px;height:28px;
+    background:#f6dfae;border-radius:45% 45% 40% 40%;border:2px solid #caa15f;
+  }
+  .nyan-face::before,.nyan-face::after{
+    content:'';position:absolute;top:-8px;width:0;height:0;
+    border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:9px solid #f6dfae;
+  }
+  .nyan-face::before{left:1px;}
+  .nyan-face::after{right:1px;}
+  .nyan-eye{position:absolute;top:9px;width:4px;height:2px;background:#3a2a1a;border-radius:1px;}
+  .nyan-eye.l{left:7px;}
+  .nyan-eye.r{right:7px;}
+  .nyan-cheek{position:absolute;top:15px;width:5px;height:3px;background:#ffb6c9;border-radius:50%;opacity:0.8;}
+  .nyan-cheek.l{left:3px;}
+  .nyan-cheek.r{right:3px;}
+  @keyframes nyanFly{
+    0%{left:-170px;}
+    100%{left:110%;}
+  }
+  @keyframes nyanBob{
+    0%{transform:translateY(0);} 100%{transform:translateY(-5px);}
+  }
+  @keyframes nyanTrailWave{
+    0%{transform:translateY(0) scaleX(1);} 100%{transform:translateY(3px) scaleX(0.96);}
+  }
 </style>
 </head>
 <body>
@@ -2087,6 +2157,38 @@ document.addEventListener('click', function(e){
   if(!btn) return;
   if(Math.random() < EGG_CHANCE_BUTTON) playOneShot(AUDIO_SRC.eggAreSure, 0.7);
 }, true);
+
+/* ---------- IDLE MASCOT (Nyan Cat) ---------- */
+const IDLE_MASCOT_THRESHOLD_MS = 90000;
+let lastInteractionTs = Date.now();
+['click','keydown','mousemove','touchstart'].forEach(evt => {
+  document.addEventListener(evt, () => { lastInteractionTs = Date.now(); }, true);
+});
+function spawnNyanMascot(){
+  if(document.getElementById('nyanMascot')) return;
+  const el = document.createElement('div');
+  el.id = 'nyanMascot';
+  el.className = 'nyan-mascot';
+  el.innerHTML = `
+    <div class="nyan-trail"></div>
+    <div class="nyan-body">
+      <div class="nyan-face">
+        <div class="nyan-eye l"></div><div class="nyan-eye r"></div>
+        <div class="nyan-cheek l"></div><div class="nyan-cheek r"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 7000);
+}
+setInterval(() => {
+  const idleFor = Date.now() - lastInteractionTs;
+  const busy = !!(live || S.scoringMatch || S.pendingReveal || S.allianceSelection);
+  if(idleFor >= IDLE_MASCOT_THRESHOLD_MS && !busy){
+    spawnNyanMascot();
+    lastInteractionTs = Date.now();
+  }
+}, 5000);
+
 let audioCtx = null;
 let musicEl = null;
 function isSoundOn(){ return S.soundEnabled !== false; }
@@ -2552,6 +2654,62 @@ function runDrumroll(big, onComplete){
   hit();
 }
 
+// A short electrical zap — a burst of quick random-pitched blips standing in for a spark sound.
+function playZapSound(){
+  if(!isSoundOn()) return;
+  const ctx = ensureAudioCtx();
+  if(!ctx) return;
+  try{
+    const now = ctx.currentTime;
+    for(let i=0; i<6; i++){
+      const t = now + i*0.045;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(300+Math.random()*900, t);
+      gain.gain.setValueAtTime(0.16, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t+0.04);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t); osc.stop(t+0.05);
+    }
+  }catch(e){ /* audio unavailable — spark still shows visually */ }
+}
+// Two quick low thumps ("lub-dub") for the close-game tension moment.
+function playHeartbeat(){
+  if(!isSoundOn()) return;
+  const ctx = ensureAudioCtx();
+  if(!ctx) return;
+  try{
+    [0, 0.16].forEach((offset, i) => {
+      const t = ctx.currentTime + offset;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(i===0 ? 70 : 60, t);
+      gain.gain.setValueAtTime(0.4, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t+0.14);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t); osc.stop(t+0.16);
+    });
+  }catch(e){ /* audio unavailable — shake still shows visually */ }
+}
+function triggerTieSpark(overlay){
+  if(!overlay) return;
+  playZapSound();
+  const el = document.createElement('div');
+  el.className = 'tie-spark-overlay';
+  el.innerHTML = `<div class="tie-spark-flicker"></div><div class="tie-spark-text">⚡ SHORT CIRCUIT ⚡</div>`;
+  overlay.appendChild(el);
+  setTimeout(() => el.remove(), 650);
+}
+function triggerCloseGameTension(overlay){
+  if(!overlay) return;
+  playHeartbeat();
+  overlay.classList.remove('overlay-shake');
+  void overlay.offsetWidth;
+  overlay.classList.add('overlay-shake');
+}
+
 /* Circuit breaker reveal — reserved for the Grand Finals championship-deciding match.
    Breaker panels trip inward from the edges toward the center, building to a
    full-screen overload flash before the result is revealed. */
@@ -2592,7 +2750,7 @@ function openResultReveal(){
   const colorClass = m.winner==='tie' ? 'gold' : m.winner;
   const DRUMROLL_START_DELAY_MS = 400;
   root.innerHTML = `
-  <div class="live-results-overlay">
+  <div class="live-results-overlay" id="liveResultsOverlay">
     <canvas id="confettiCanvas"></canvas>
     <div class="grid-charge-stage" id="gridChargeStage">${buildNeutralGridHTML()}</div>
     <div class="live-results-content" id="revealContent" style="opacity:0;transition:opacity .5s ease;"></div>
@@ -2600,6 +2758,14 @@ function openResultReveal(){
   setTimeout(() => {
     runDrumroll(isChampionship, () => {
       const stage = document.getElementById('gridChargeStage');
+      const overlay = document.getElementById('liveResultsOverlay');
+      const closeGame = m.winner!=='tie' && Math.max(m.redScore,m.blueScore)>0 &&
+        (Math.abs(m.redScore-m.blueScore)/Math.max(m.redScore,m.blueScore)) <= 0.15;
+      if(m.winner==='tie'){
+        triggerTieSpark(overlay);
+      } else if(closeGame){
+        triggerCloseGameTension(overlay);
+      }
       if(isChampionship){
         if(stage){ stage.className = 'breaker-charge-stage'; stage.innerHTML = buildCircuitBreakerHTML(colorClass); }
         setTimeout(() => { renderRevealContent(m, teams, isFinal, pr); }, breakerTotalMs());
