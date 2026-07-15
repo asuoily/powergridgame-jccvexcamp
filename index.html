@@ -1198,7 +1198,7 @@ function renderRulesPanel(){
     <p class="rules-note">This is how long a live match runs before it automatically ends — the live match screen shows a live countdown to this time, and you can still end a match sooner with "End Match Early". Changing it won't affect a match already in progress.</p>
     <p class="rules-note">Changes apply immediately to new and unscored matches. Matches that were already scored keep their original results — tap "Rescore" on a match card to recalculate it${scoredTotal>0 ? `, or <a href="#" onclick="event.preventDefault();rescoreAllMatches();" style="color:var(--gold);">Rescore All</a> to recalculate every scored match with the current values` : ' (once matches are scored, you\'ll be able to Rescore All here)'}.</p>
     <h4>Grand Finals</h4>
-    <p>The top 2 ranked teams captain the two alliances. Seed 1 picks a partner first, then seed 2 picks from whoever remains. No ranking points — the first alliance to win 2 matches takes the title.</p>
+    <p>The top 2 ranked teams captain the two alliances and draft every other team between them (seed 1 picks first, then seed 2, alternating until everyone is on an alliance) — so every team competes in the Grand Finals. No ranking points — the first alliance to win 2 matches takes the title.</p>
   </div>`;
 }
 
@@ -1675,7 +1675,7 @@ function renderFinalsTab(allScored){
     if(!S.allianceSelection){
       return `<div class="finals-ready">
         <h3>Ready for the Grand Finals</h3>
-        <p>The top 2 ranked teams captain the two alliances and pick their own partner. ${escapeHtml(rankings[0].team)} (#1) picks first, then ${escapeHtml(rankings[1].team)} (#2) picks from whoever remains.</p>
+        <p>The top 2 ranked teams captain the two alliances and draft every other team between them, alternating picks, so everyone competes in the Grand Finals. ${escapeHtml(rankings[0].team)} (#1) picks first, then ${escapeHtml(rankings[1].team)} (#2), back and forth until all teams are drafted.</p>
         <div class="seed-preview">
           <div class="seed-pair red"><span class="seed-tag">RED CAPTAIN</span>${escapeHtml(rankings[0].team)} (#1)</div>
           <div class="seed-pair blue"><span class="seed-tag">BLUE CAPTAIN</span>${escapeHtml(rankings[1].team)} (#2)</div>
@@ -1709,15 +1709,15 @@ function renderFinalsTab(allScored){
 }
 function renderAllianceSelectionUI(rankings){
   const sel = S.allianceSelection;
-  const takenSet = new Set([sel.redCaptain, sel.blueCaptain, sel.redPick, sel.bluePick].filter(Boolean));
+  const takenSet = new Set([...sel.redTeam, ...sel.blueTeam]);
   const available = rankings.filter(r => !takenSet.has(r.team));
   const turnCaptain = sel.turn==='red' ? sel.redCaptain : sel.blueCaptain;
   return `<div class="finals-ready">
     <h3>Alliance Selection</h3>
-    <p><b>${escapeHtml(turnCaptain)}</b> is picking a partner for the ${sel.turn.toUpperCase()} alliance.</p>
+    <p><b>${escapeHtml(turnCaptain)}</b> is picking a teammate for the ${sel.turn.toUpperCase()} alliance. ${available.length} team${available.length!==1?'s':''} left to draft.</p>
     <div class="seed-preview">
-      <div class="seed-pair red"><span class="seed-tag">RED</span>${escapeHtml(sel.redCaptain)}${sel.redPick ? ' &amp; '+escapeHtml(sel.redPick) : ' — picking now…'}</div>
-      <div class="seed-pair blue"><span class="seed-tag">BLUE</span>${escapeHtml(sel.blueCaptain)}${sel.bluePick ? ' &amp; '+escapeHtml(sel.bluePick) : (sel.turn==='blue' ? ' — picking now…' : ' — waiting…')}</div>
+      <div class="seed-pair red"><span class="seed-tag">RED</span>${sel.redTeam.map(escapeHtml).join(' &amp; ')}</div>
+      <div class="seed-pair blue"><span class="seed-tag">BLUE</span>${sel.blueTeam.map(escapeHtml).join(' &amp; ')}</div>
     </div>
     <div class="pick-list">
       ${available.map(r => {
@@ -1732,10 +1732,14 @@ function startAllianceSelection(){
   S.allianceSelection = {
     redCaptain: rankings[0].team,
     blueCaptain: rankings[1].team,
-    redPick: null,
-    bluePick: null,
+    redTeam: [rankings[0].team],
+    blueTeam: [rankings[1].team],
     turn: 'red'
   };
+  if(rankings.length<=2){
+    finalizeAllianceSelection();
+    return;
+  }
   saveState();
   renderApp();
 }
@@ -1744,21 +1748,23 @@ function pickAlliancePartner(rankIdx){
   if(!sel) return;
   const rankings = getRankings();
   const team = rankings[rankIdx].team;
-  if(sel.turn==='red'){
-    sel.redPick = team;
-    sel.turn = 'blue';
+  if(sel.turn==='red') sel.redTeam.push(team);
+  else sel.blueTeam.push(team);
+  const takenSet = new Set([...sel.redTeam, ...sel.blueTeam]);
+  const remaining = rankings.filter(r => !takenSet.has(r.team));
+  if(remaining.length===0){
+    finalizeAllianceSelection();
+  } else {
+    sel.turn = sel.turn==='red' ? 'blue' : 'red';
     saveState();
     renderApp();
-  } else {
-    sel.bluePick = team;
-    finalizeAllianceSelection();
   }
 }
 function finalizeAllianceSelection(){
   const sel = S.allianceSelection;
   S.finals = {
-    redAlliance:[sel.redCaptain, sel.redPick],
-    blueAlliance:[sel.blueCaptain, sel.bluePick],
+    redAlliance: sel.redTeam,
+    blueAlliance: sel.blueTeam,
     matches:[
       {matchNum:1, scored:false, redStats:blankStats(), blueStats:blankStats(), redScore:0, blueScore:0, winner:null, durationSec:null},
       {matchNum:2, scored:false, redStats:blankStats(), blueStats:blankStats(), redScore:0, blueScore:0, winner:null, durationSec:null},
@@ -2015,6 +2021,7 @@ function toggleBreakRun(){
     if(breakTimer.remainingSec<=0) breakTimer.remainingSec = breakTimer.totalSec;
     breakTimer.targetTs = Date.now() + breakTimer.remainingSec*1000;
     breakTimer.handle = setInterval(tickBreakTimer, 250);
+    if(Math.random() < EGG_CHANCE_BREAK) playOneShot(AUDIO_SRC.eggBreakTime, 0.9);
   } else if(breakTimer.handle){
     clearInterval(breakTimer.handle); breakTimer.handle = null;
   }
@@ -2053,7 +2060,19 @@ function beep(){
 }
 
 /* ============================= AUDIO ============================= */
-const AUDIO_SRC = { start:'MATCHSTART.mp3', end:'MATCHEND.mp3', music:'MATCHMUSIC.mp3' };
+const AUDIO_SRC = { start:'MATCHSTART.mp3', end:'MATCHEND.mp3', music:'MATCHMUSIC.mp3', win:'MATCHWIN.wav', warn30:'MATCHWARN.wav',
+  eggRedWin:'EGG_REDWIN.wav', eggBlueWin:'EGG_BLUEWIN.wav', eggAreSure:'EGG_ARESURE.wav', eggBreakTime:'EGG_BREAKTIME.wav' };
+// Easter egg odds: win eggs are a fun surprise on a big moment, so they're common enough to
+// actually show up; the button one fires on every button click in the app, so it has to stay
+// rare or it gets old fast.
+const EGG_CHANCE_WIN = 0.15;
+const EGG_CHANCE_BREAK = 0.15;
+const EGG_CHANCE_BUTTON = 0.02;
+document.addEventListener('click', function(e){
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  if(Math.random() < EGG_CHANCE_BUTTON) playOneShot(AUDIO_SRC.eggAreSure, 0.7);
+}, true);
 let audioCtx = null;
 let musicEl = null;
 function isSoundOn(){ return S.soundEnabled !== false; }
@@ -2143,7 +2162,7 @@ function getLiveTeams(){
 }
 function openLive(type, index){
   const durationSec = (S.matchConfig && S.matchConfig.durationSec) || 120;
-  live = {type, index, phase:'idle', elapsedSec:0, startTs:null, countdownVal:3, timerHandle:null, countdownHandle:null, durationSec, autoEnded:false, lastFinalCountdown:null};
+  live = {type, index, phase:'idle', elapsedSec:0, startTs:null, countdownVal:3, timerHandle:null, countdownHandle:null, durationSec, autoEnded:false, lastFinalCountdown:null, warn30Played:false};
   renderLive();
 }
 function confirmExitLive(){
@@ -2310,6 +2329,10 @@ function startLiveRunning(){
       el.textContent = fmtTime(remaining);
       el.classList.toggle('warn', remaining>0 && remaining<=30);
       el.classList.toggle('done', remaining<=0);
+    }
+    if(remaining>0 && remaining<=30 && !live.warn30Played){
+      live.warn30Played = true;
+      playOneShot(AUDIO_SRC.warn30, 0.9);
     }
     if(remaining>0 && remaining<=5){
       if(live.lastFinalCountdown !== remaining){
@@ -2561,6 +2584,11 @@ function renderRevealContent(m, teams, isFinal, pr){
   contentEl.style.opacity = '1';
   if(winner && winner!=='tie'){
     setTimeout(() => launchConfetti(winner, isChampionship), 60);
+    if(Math.random() < EGG_CHANCE_WIN){
+      playOneShot(winner==='red' ? AUDIO_SRC.eggRedWin : AUDIO_SRC.eggBlueWin, 0.9);
+    } else {
+      playOneShot(AUDIO_SRC.win, 0.9);
+    }
   }
 }
 function closeResultReveal(){
