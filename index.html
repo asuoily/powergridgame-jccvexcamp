@@ -6,7 +6,7 @@
 <title>Field Control — Power Grid (v2) Match Scheduler</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Chakra+Petch:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#0B0D12;
@@ -656,59 +656,20 @@
   }
   .live-results-overlay canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
   .live-results-content{position:relative;z-index:5;pointer-events:auto;text-align:center;padding:20px;max-width:480px;}
-  .results-winner{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:44px;letter-spacing:0.05em;margin-bottom:6px;}
-  .results-winner.red{color:var(--red);text-shadow:0 0 40px rgba(255,90,90,0.5);}
-  .results-winner.blue{color:var(--blue);text-shadow:0 0 40px rgba(76,141,255,0.5);}
-  .results-tie{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:40px;color:var(--gold);margin-bottom:10px;}
-  .results-winner-teams{font-size:18px;color:var(--text);margin-bottom:24px;}
-  .results-scoreline{display:flex;gap:20px;justify-content:center;margin-bottom:10px;}
-  .results-score-block{background:var(--panel-2);border:1px solid var(--border);border-radius:14px;padding:14px 26px;min-width:120px;}
-  .results-score-block span{display:block;font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:0.1em;color:var(--text-faint);margin-bottom:6px;}
-  .results-score-block b{font-family:'JetBrains Mono',monospace;font-size:34px;}
-  .results-score-block.red b{color:var(--red);}
-  .results-score-block.blue b{color:var(--blue);}
-  .results-score-block small{display:block;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--gold);margin-top:4px;font-weight:600;}
-
-  .grid-charge-stage{
-    position:absolute;inset:0;display:grid;
-    grid-template-columns:repeat(12,1fr);grid-template-rows:repeat(7,1fr);
-    gap:3px;padding:14px;pointer-events:none;
-  }
-  .grid-cell{border-radius:3px;background:var(--panel-3);opacity:0.15;animation:cellCharge 1.2s ease forwards;}
-  .grid-cell.red{--cell-color:var(--red);}
-  .grid-cell.blue{--cell-color:var(--blue);}
-  .grid-cell.gold{--cell-color:var(--gold);}
-  @keyframes cellCharge{
-    0%{background:var(--panel-3);opacity:0.12;box-shadow:none;}
-    55%{background:var(--cell-color);opacity:1;box-shadow:0 0 16px var(--cell-color);}
-    100%{background:var(--cell-color);opacity:0.28;box-shadow:0 0 5px var(--cell-color);}
-  }
-
-  /* Drumroll build-up — plain gray cells that flash in unison before the winner's color lands */
-  .grid-cell.neutral{background:var(--panel-3);opacity:0.22;animation:none;}
-  .grid-cell.neutral.flash{animation:neutralFlash 0.3s ease;}
-  @keyframes neutralFlash{
-    0%{opacity:0.22;box-shadow:none;}
-    35%{opacity:0.95;background:rgba(255,255,255,0.5);box-shadow:0 0 14px rgba(255,255,255,0.4);}
-    100%{opacity:0.22;background:var(--panel-3);box-shadow:none;}
-  }
+  /* Drumroll build-up — the same floor grid used by the win cinematic pulses dim and gray,
+     then flashes brighter on each drum hit, so the suspense phase flows straight into the
+     reveal instead of cutting to a different visual. */
   .drum-kicker{
     position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;
     font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;letter-spacing:0.2em;
     color:var(--text-dim);text-shadow:0 0 14px rgba(255,255,255,0.25);white-space:nowrap;
   }
-
-  /* ---------- TIE MATCH SPARK ---------- */
-  .tie-spark-overlay{position:absolute;inset:0;z-index:4;pointer-events:none;}
-  .tie-spark-flicker{position:absolute;inset:0;background:rgba(242,183,5,0.35);animation:tieFlicker 0.55s steps(2,end);}
-  .tie-spark-text{
-    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;letter-spacing:0.22em;
-    color:var(--gold);text-shadow:0 0 16px var(--gold);white-space:nowrap;
-    animation:tieFlicker 0.55s steps(2,end);
-  }
-  @keyframes tieFlicker{
-    0%{opacity:0;} 15%{opacity:1;} 30%{opacity:0;} 45%{opacity:0.85;} 60%{opacity:0;} 75%{opacity:0.65;} 100%{opacity:0;}
+  .awin-floor.suspense{opacity:.16;}
+  .awin-floor.suspense.flash{animation:awinFloorFlash .3s ease;}
+  @keyframes awinFloorFlash{
+    0%{opacity:.16;filter:brightness(1);}
+    40%{opacity:.55;filter:brightness(1.9);}
+    100%{opacity:.16;filter:brightness(1);}
   }
 
   /* ---------- CLOSE-GAME TENSION ---------- */
@@ -721,66 +682,6 @@
     80%{transform:translate(3px,4px);}
   }
 
-  /* ---------- CIRCUIT BREAKER REVEAL (Grand Finals championship) ---------- */
-  .breaker-charge-stage{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
-  .breaker-cell-grid{
-    position:absolute;inset:0;display:grid;
-    grid-template-columns:repeat(9,1fr);grid-template-rows:repeat(5,1fr);
-    gap:8px;padding:28px;
-  }
-  .breaker-cell{
-    position:relative;border-radius:5px;background:var(--panel-3);
-    border:1px solid var(--border);opacity:0.3;
-    display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;
-    animation:breakerTrip 0.9s ease forwards;
-  }
-  .breaker-cell.red{--cell-color:var(--red);}
-  .breaker-cell.blue{--cell-color:var(--blue);}
-  .breaker-cell.gold{--cell-color:var(--gold);}
-  .breaker-lever{
-    width:5px;height:65%;background:var(--text-faint);border-radius:2px;
-    transform-origin:bottom center;transform:rotate(0deg);
-    animation:leverFlip 0.9s ease forwards;
-  }
-  @keyframes breakerTrip{
-    0%{background:var(--panel-3);border-color:var(--border);box-shadow:none;opacity:0.3;}
-    45%{background:rgba(255,255,255,0.06);border-color:var(--cell-color);box-shadow:0 0 20px var(--cell-color);opacity:1;}
-    100%{background:rgba(255,255,255,0.03);border-color:var(--cell-color);box-shadow:0 0 9px var(--cell-color);opacity:0.95;}
-  }
-  @keyframes leverFlip{
-    0%{transform:rotate(0deg);background:var(--text-faint);}
-    45%{transform:rotate(38deg);background:#fff;box-shadow:0 0 10px #fff;}
-    100%{transform:rotate(38deg);background:var(--cell-color);box-shadow:0 0 6px var(--cell-color);}
-  }
-  .breaker-kicker{
-    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;
-    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;
-    letter-spacing:0.24em;color:var(--text);opacity:0;white-space:nowrap;
-    text-shadow:0 0 14px currentColor;
-    animation-name:kickerFlicker;animation-timing-function:steps(1,end);animation-fill-mode:forwards;
-  }
-  @keyframes kickerFlicker{
-    0%{opacity:0;} 8%{opacity:1;} 13%{opacity:0.15;} 18%{opacity:1;}
-    70%{opacity:1;} 85%{opacity:0.25;} 92%{opacity:0.85;} 100%{opacity:0;}
-  }
-  .breaker-flash-layer{
-    position:absolute;inset:0;z-index:3;background:#fff;opacity:0;
-    animation:breakerFlash 0.55s ease forwards;
-  }
-  @keyframes breakerFlash{
-    0%{opacity:0;} 18%{opacity:1;} 100%{opacity:0;}
-  }
-  .results-winner.champion-flicker{
-    animation:championFlicker 1s steps(1,end) both;
-  }
-  @keyframes championFlicker{
-    0%{opacity:0;} 6%{opacity:1;} 11%{opacity:0.2;} 16%{opacity:1;}
-    30%{opacity:0.35;} 36%{opacity:1;} 100%{opacity:1;}
-  }
-  .champion-kicker-ribbon{
-    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:11.5px;letter-spacing:0.2em;
-    color:var(--gold);text-transform:uppercase;margin-bottom:10px;opacity:0.9;
-  }
 
   .reveal-rank-changes{margin:18px auto 0;max-width:420px;background:var(--panel-2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-align:left;}
   .reveal-rank-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);margin-bottom:8px;}
@@ -793,14 +694,102 @@
   .rank-down{color:var(--red);}
   .rank-same{color:var(--text-faint);}
 
+  /* ---------- ALLIANCE WIN CINEMATIC (decisive win reveal) ---------- */
+  .awin-stage{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
+  .awin-floor{position:absolute;inset:auto 0 0 0;height:52%;
+    background-image:
+      linear-gradient(color-mix(in srgb, var(--ally) 55%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--ally) 55%, transparent) 1px, transparent 1px);
+    background-size:64px 64px;
+    transform:perspective(560px) rotateX(62deg) scale(1.6);
+    transform-origin:50% 0;opacity:0;
+    -webkit-mask-image:linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
+            mask-image:linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
+  }
+  .awin-playing .awin-floor{animation:awinFloorIn 2.4s ease-out forwards, awinFloorPulse 2.6s 2.6s ease-in-out infinite}
+  @keyframes awinFloorIn{0%{opacity:0;background-position:0 240px,0 0}100%{opacity:.34;background-position:0 0,0 0}}
+  @keyframes awinFloorPulse{0%,100%{opacity:.34}50%{opacity:.52}}
+  .awin-spot{position:absolute;top:-24%;width:34vw;height:150%;
+    background:linear-gradient(color-mix(in srgb, var(--text) 9%, transparent), transparent 72%);
+    clip-path:polygon(46% 0,54% 0,100% 100%,0 100%);
+    opacity:0;filter:blur(6px);transform-origin:50% 0}
+  .awin-spot.left{left:6%} .awin-spot.right{right:6%}
+  .awin-playing .awin-spot.left{animation:awinSweepL 3.4s .2s ease-in-out forwards}
+  .awin-playing .awin-spot.right{animation:awinSweepR 3.4s .2s ease-in-out forwards}
+  @keyframes awinSweepL{0%{opacity:0;transform:rotate(-26deg)}18%{opacity:.85}70%{opacity:.7;transform:rotate(14deg)}100%{opacity:0;transform:rotate(20deg)}}
+  @keyframes awinSweepR{0%{opacity:0;transform:rotate(26deg)}18%{opacity:.85}70%{opacity:.7;transform:rotate(-14deg)}100%{opacity:0;transform:rotate(-20deg)}}
+  .awin-streak{position:absolute;top:50%;left:50%;height:3px;width:46vmax;
+    background:linear-gradient(90deg, transparent, var(--ally-hot) 55%, #fff);
+    border-radius:2px;opacity:0;transform-origin:100% 50%;
+    filter:drop-shadow(0 0 6px var(--ally-hot))}
+  .awin-playing .awin-streak{animation:awinConverge 1.15s cubic-bezier(.7,0,.9,.4) forwards}
+  @keyframes awinConverge{
+    0%{opacity:0;transform:rotate(var(--a)) translateX(0) scaleX(1)}
+    12%{opacity:1}
+    100%{opacity:0;transform:rotate(var(--a)) translateX(-46vmax) scaleX(.05)}
+  }
+  .awin-flash{position:absolute;inset:0;background:#fff;opacity:0;}
+  .awin-playing .awin-flash{animation:awinFlash .55s 3.3s ease-out forwards}
+  @keyframes awinFlash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
+  .awin-ring{position:absolute;top:50%;left:50%;width:12vmin;height:12vmin;border-radius:50%;
+    border:3px solid var(--ally-hot);opacity:0;transform:translate(-50%,-50%) scale(.2)}
+  .awin-playing .awin-ring{animation:awinRing 1.4s cubic-bezier(.1,.6,.2,1) forwards}
+  .awin-playing .awin-ring.r1{animation-delay:3.42s}
+  .awin-playing .awin-ring.r2{animation-delay:3.62s}
+  @keyframes awinRing{0%{opacity:.95;transform:translate(-50%,-50%) scale(.2);border-width:6px}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(11);border-width:1px}}
+
+  .awin-panel{position:relative;z-index:5;pointer-events:auto;text-align:center;opacity:0;transform:scale(.6);
+    padding:5vmin 8vmin;margin:0 auto;max-width:640px;
+    background:linear-gradient(160deg, #1a212e 0%, #10151f 55%, #0b0f16 100%);
+    border:1px solid var(--border);
+    clip-path:polygon(4% 0,96% 0,100% 14%,100% 86%,96% 100%,4% 100%,0 86%,0 14%);
+    box-shadow:0 0 90px color-mix(in srgb, var(--ally) 45%, transparent),
+               inset 0 0 40px rgba(0,0,0,.55)}
+  .awin-panel::before,.awin-panel::after{content:"";position:absolute;left:6%;right:6%;height:3px;
+    background:linear-gradient(90deg, transparent, var(--ally-hot), transparent)}
+  .awin-panel::before{top:0} .awin-panel::after{bottom:0}
+  .awin-playing .awin-panel{animation:awinPanelIn .5s 3.5s cubic-bezier(.2,1.4,.3,1) forwards}
+  @keyframes awinPanelIn{0%{opacity:0;transform:scale(.6)}100%{opacity:1;transform:scale(1)}}
+  .awin-eyebrow{font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:.5em;text-indent:.5em;
+    font-size:clamp(11px,1.7vmin,18px);color:color-mix(in srgb, var(--text) 60%, var(--ally-hot));
+    text-transform:uppercase;margin-bottom:1.4vmin}
+  .awin-alliance{font-family:'Chakra Petch',sans-serif;font-style:italic;font-weight:700;
+    font-size:clamp(34px,9.5vmin,104px);line-height:.95;letter-spacing:.02em;
+    color:var(--ally-hot);
+    text-shadow:0 0 18px color-mix(in srgb, var(--ally) 70%, transparent),
+                0 4px 0 color-mix(in srgb, var(--ally) 40%, #000)}
+  .awin-wins{font-family:'Chakra Petch',sans-serif;font-style:italic;font-weight:700;
+    font-size:clamp(40px,11.5vmin,132px);line-height:1;letter-spacing:.05em;color:var(--text);
+    text-shadow:0 0 24px rgba(255,255,255,.55);
+    opacity:0;transform:scale(2.4)}
+  .awin-playing .awin-wins{animation:awinSlam .38s 3.78s cubic-bezier(.3,1.6,.4,1) forwards}
+  @keyframes awinSlam{0%{opacity:0;transform:scale(2.4)}100%{opacity:1;transform:scale(1)}}
+  .awin-teams{font-size:16px;color:var(--text-dim);margin-top:1vmin;opacity:0}
+  .awin-playing .awin-teams{animation:awinFadeUp .5s 4.15s ease-out forwards}
+  .awin-scores{display:flex;gap:5vmin;justify-content:center;margin-top:2.4vmin;opacity:0}
+  .awin-playing .awin-scores{animation:awinFadeUp .5s 4.3s ease-out forwards}
+  @keyframes awinFadeUp{0%{opacity:0;transform:translateY(14px)}100%{opacity:1;transform:translateY(0)}}
+  .awin-score{display:flex;flex-direction:column;align-items:center;gap:.3vmin}
+  .awin-score .num{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:clamp(24px,4.8vmin,52px);line-height:1}
+  .awin-score .rp{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--gold);font-weight:600;}
+  .awin-score .lbl{font-weight:600;letter-spacing:.3em;text-indent:.3em;font-size:clamp(9px,1.3vmin,13px);
+    text-transform:uppercase;opacity:.6}
+  .awin-score.red .num{color:var(--red)} .awin-score.blue .num{color:var(--blue)}
+  .awin-glow{position:absolute;inset:-30%;pointer-events:none;border-radius:50%;
+    background:radial-gradient(circle, color-mix(in srgb, var(--ally) 22%, transparent), transparent 62%);
+    opacity:0;z-index:-1}
+  .awin-playing .awin-glow{animation:awinBreath 2.2s 4.2s ease-in-out infinite}
+  @keyframes awinBreath{0%,100%{opacity:.5;transform:scale(.96)}50%{opacity:1;transform:scale(1.04)}}
+  .awin-extra{opacity:0;}
+  .awin-playing .awin-extra{animation:awinFadeUp .5s 4.5s ease-out forwards}
+  .awin-extra .btn-primary{margin-top:18px;}
+
   @media(max-width:640px){
     .live-alliances{grid-template-columns:1fr;}
     .live-score{font-size:48px;}
     .live-timer{font-size:38px;}
     .countdown-num{font-size:120px;}
-    .results-winner{font-size:28px;}
-    .results-score-block{padding:12px 18px;min-width:100px;}
-    .breaker-kicker{font-size:10.5px;letter-spacing:0.16em;}
   }
 
   /* ---------- FOOTER ---------- */
@@ -2550,75 +2539,196 @@ function confirmFinalScore(){
   saveState();
   closeLive();
 }
-function launchConfetti(winnerColor, big){
+/* ============================= ALLIANCE WIN CINEMATIC ============================= */
+const AWIN_COLORS = {
+  red:  { ally:'#ed1c24', hot:'#ff5a4e', confetti:['#ff5a4e','#ed1c24','#ffffff','#ffd2cd'] },
+  blue: { ally:'#0d7ae5', hot:'#4db4ff', confetti:['#4db4ff','#0d7ae5','#ffffff','#bfe4ff'] },
+  tie:  { ally:'#c98f04', hot:'#ffd866', confetti:['#ffd866','#f2b705','#ffffff','#fff2c2'] }
+};
+const AWIN_NEUTRAL = { ally:'#8991A3', hot:'#EEF0F4' };
+let awinParticles = [];
+let awinRaf = null;
+let awinSparkTimer = null;
+let awinTimers = [];
+function awinFit(){
   const canvas = document.getElementById('confettiCanvas');
-  if(!canvas) return;
-  const ctx = canvas.getContext('2d');
-  function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-  resize();
-  const colors = winnerColor==='red' ? ['#FF5A5A','#F2B705','#EEF0F4'] : ['#4C8DFF','#F2B705','#EEF0F4'];
-  const pieces = [];
-  const N = big ? 280 : 160;
-  for(let i=0;i<N;i++){
-    pieces.push({
-      x: Math.random()*canvas.width,
-      y: -20 - Math.random()*canvas.height*0.6,
-      w: 6+Math.random()*6,
-      h: 8+Math.random()*10,
-      color: colors[Math.floor(Math.random()*colors.length)],
-      vy: 2+Math.random()*3,
-      vx: -1.2+Math.random()*2.4,
-      rot: Math.random()*360,
-      vr: -6+Math.random()*12
-    });
+  if(canvas){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+}
+window.addEventListener('resize', awinFit);
+function awinSpawnSparks(n, cx, cy, color){
+  for(let i=0;i<n;i++){
+    const a = Math.random()*Math.PI*2, sp = 2+Math.random()*9;
+    awinParticles.push({t:'spark', x:cx, y:cy, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+      life:1, decay:.015+Math.random()*.02, size:1+Math.random()*2.2, color});
   }
-  const start = performance.now();
-  const duration = big ? 6500 : 4500;
-  function frame(t){
-    if(!document.getElementById('confettiCanvas')) return;
-    const elapsed = t - start;
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    pieces.forEach(p => {
-      p.x += p.vx; p.y += p.vy; p.rot += p.vr;
-      ctx.save();
-      ctx.translate(p.x,p.y);
-      ctx.rotate(p.rot*Math.PI/180);
+}
+function awinSpawnConfetti(n, colors, canvas){
+  for(let i=0;i<n;i++){
+    awinParticles.push({t:'conf',
+      x:Math.random()*canvas.width, y:-20-Math.random()*canvas.height*.4,
+      vx:(Math.random()-.5)*1.6, vy:1.6+Math.random()*2.6,
+      rot:Math.random()*Math.PI, vr:(Math.random()-.5)*.22,
+      w:6+Math.random()*7, h:9+Math.random()*9,
+      life:1, decay:.0022,
+      color:colors[Math.floor(Math.random()*colors.length)],
+      sway:Math.random()*Math.PI*2});
+  }
+}
+function awinTick(){
+  const canvas = document.getElementById('confettiCanvas');
+  if(!canvas){ awinRaf = null; return; }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  awinParticles = awinParticles.filter(p => p.life > 0);
+  for(const p of awinParticles){
+    p.life -= p.decay;
+    if(p.t==='spark'){
+      p.x += p.vx; p.y += p.vy; p.vy += .12; p.vx *= .985;
+      ctx.globalAlpha = Math.max(p.life,0);
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,7); ctx.fill();
+    } else {
+      p.sway += .04;
+      p.x += p.vx + Math.sin(p.sway)*1.1;
+      p.y += p.vy; p.rot += p.vr;
+      ctx.globalAlpha = Math.min(1, p.life*3);
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot);
       ctx.fillStyle = p.color;
       ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
       ctx.restore();
-    });
-    if(elapsed < duration){
-      requestAnimationFrame(frame);
-    } else {
-      ctx.clearRect(0,0,canvas.width,canvas.height);
+      if(p.y > canvas.height+30) p.life = 0;
     }
   }
-  requestAnimationFrame(frame);
-  window.addEventListener('resize', resize);
+  ctx.globalAlpha = 1;
+  awinRaf = requestAnimationFrame(awinTick);
 }
-
-/* ============================= RESULT REVEAL ============================= */
-const REVEAL_GRID_COLS = 12, REVEAL_GRID_ROWS = 7, REVEAL_CELL_ANIM_MS = 1200, REVEAL_STEP_MS = 40;
-function buildRevealGridHTML(colorClass){
-  const cx = (REVEAL_GRID_COLS-1)/2, cy = (REVEAL_GRID_ROWS-1)/2;
+function stopAwinFx(){
+  if(awinRaf) cancelAnimationFrame(awinRaf);
+  awinRaf = null;
+  if(awinSparkTimer) clearInterval(awinSparkTimer);
+  awinSparkTimer = null;
+  awinTimers.forEach(clearTimeout);
+  awinTimers = [];
+  awinParticles = [];
+  const canvas = document.getElementById('confettiCanvas');
+  if(canvas){ canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height); }
+}
+function buildAwinStreaksHTML(){
   let html = '';
-  for(let r=0; r<REVEAL_GRID_ROWS; r++){
-    for(let c=0; c<REVEAL_GRID_COLS; c++){
-      const dist = Math.abs(c-cx) + Math.abs(r-cy);
-      const delay = Math.round(dist*REVEAL_STEP_MS);
-      html += `<div class="grid-cell ${colorClass}" style="animation-delay:${delay}ms"></div>`;
-    }
+  for(let i=0;i<10;i++){
+    const angle = (i*36 + (Math.random()*14-7));
+    const delay = (2.15 + Math.random()*0.9);
+    html += `<div class="awin-streak" style="--a:${angle}deg;animation-delay:${delay}s"></div>`;
   }
   return html;
 }
-function revealGridTotalMs(){
-  const cx = (REVEAL_GRID_COLS-1)/2, cy = (REVEAL_GRID_ROWS-1)/2;
-  return Math.round((cx+cy)*REVEAL_STEP_MS) + REVEAL_CELL_ANIM_MS;
+function buildRankChangesHTML(teams, pr){
+  if(!pr.rankingsBefore || !pr.rankingsAfter) return '';
+  const beforeMap = {}; pr.rankingsBefore.forEach((r,i) => { beforeMap[r.team] = {rp:r.rp, rank:i+1}; });
+  const afterMap = {}; pr.rankingsAfter.forEach((r,i) => { afterMap[r.team] = {rp:r.rp, rank:i+1}; });
+  const involved = [...teams.red, ...teams.blue];
+  return `<div class="reveal-rank-changes">
+    <div class="reveal-rank-title">Ranking Impact</div>
+    ${involved.map(t => {
+      const b = beforeMap[t] || {rp:0, rank:'—'};
+      const a = afterMap[t] || {rp:0, rank:'—'};
+      let arrow = '<span class="rank-same">–</span>';
+      if(typeof a.rank==='number' && typeof b.rank==='number'){
+        arrow = a.rank<b.rank ? '<span class="rank-up">▲</span>' : (a.rank>b.rank ? '<span class="rank-down">▼</span>' : '<span class="rank-same">–</span>');
+      }
+      return `<div class="reveal-rank-row">
+        <span class="reveal-rank-team">${escapeHtml(t)}</span>
+        <span class="reveal-rank-rp">${b.rp} → ${a.rp} RP</span>
+        <span class="reveal-rank-pos">#${b.rank} → #${a.rank} ${arrow}</span>
+      </div>`;
+    }).join('')}
+  </div>`;
 }
-function buildNeutralGridHTML(){
-  return `<div class="drum-kicker" id="drumKicker">DETERMINING WINNER…</div>` +
-    Array(REVEAL_GRID_COLS*REVEAL_GRID_ROWS).fill('<div class="grid-cell neutral"></div>').join('');
+function playResultSound(winner){
+  if(winner==='tie'){
+    playZapSound();
+    if(Math.random() < S.easterEggConfig.tie/100) playOneShot(AUDIO_SRC.eggTie, 0.9);
+  } else {
+    playOneShot(AUDIO_SRC.win, 0.9);
+    if(Math.random() < S.easterEggConfig.win/100){
+      playOneShot(winner==='red' ? AUDIO_SRC.eggRedWin : AUDIO_SRC.eggBlueWin, 0.9);
+    }
+  }
 }
+function runAllianceWinReveal(m, teams, isFinal, isChampionship, pr, closeGame, overlay){
+  const winner = m.winner;
+  const isTie = winner==='tie';
+  const palette = AWIN_COLORS[winner];
+  const winnerTeams = isTie ? null : (winner==='red' ? teams.red : teams.blue);
+  const eyebrow = (!isTie && isChampionship) ? '🏆 Grand Finals Champions' : (isFinal ? 'Grand Finals' : 'Match Complete');
+  const rankChangesHTML = !isFinal ? buildRankChangesHTML(teams, pr) : '';
+
+  const stage = document.getElementById('gridChargeStage');
+  const content = document.getElementById('revealContent');
+  if(stage){
+    const floor = stage.querySelector('.awin-floor');
+    if(floor) floor.classList.remove('suspense','flash');
+    const kicker = stage.querySelector('.drum-kicker');
+    if(kicker) kicker.remove();
+    stage.insertAdjacentHTML('beforeend', `
+      <div class="awin-spot left"></div>
+      <div class="awin-spot right"></div>
+      ${buildAwinStreaksHTML()}
+      <div class="awin-ring r1"></div>
+      <div class="awin-ring r2"></div>
+      <div class="awin-flash"></div>
+    `);
+  }
+  if(content){
+    content.className = 'awin-panel';
+    content.style.setProperty('--ally', palette.ally);
+    content.style.setProperty('--ally-hot', palette.hot);
+    content.innerHTML = `
+      <div class="awin-glow"></div>
+      <div class="awin-eyebrow">${escapeHtml(eyebrow)}</div>
+      ${isTie
+        ? `<div class="awin-wins">TIE!</div>`
+        : `<div class="awin-alliance">${winner.toUpperCase()} ALLIANCE</div><div class="awin-wins">WINS!</div>`}
+      ${winnerTeams ? `<div class="awin-teams">${winnerTeams.map(escapeHtml).join(' &amp; ')}</div>` : ''}
+      <div class="awin-scores">
+        <div class="awin-score red"><span class="num">${m.redScore}</span>${!isFinal?`<span class="rp">+${m.redRP} RP</span>`:''}<span class="lbl">Red</span></div>
+        <div class="awin-score blue"><span class="num">${m.blueScore}</span>${!isFinal?`<span class="rp">+${m.blueRP} RP</span>`:''}<span class="lbl">Blue</span></div>
+      </div>
+      <div class="awin-extra">
+        ${rankChangesHTML}
+        <button class="btn-primary" onclick="closeResultReveal()">Done</button>
+      </div>
+    `;
+  }
+  if(overlay){
+    overlay.style.setProperty('--ally', palette.ally);
+    overlay.style.setProperty('--ally-hot', palette.hot);
+    if(closeGame) triggerCloseGameTension(overlay);
+    void overlay.offsetWidth;
+    overlay.classList.add('awin-playing');
+  }
+
+  awinFit();
+  const canvas = document.getElementById('confettiCanvas');
+  awinRaf = requestAnimationFrame(awinTick);
+  const cx = canvas.width/2, cy = canvas.height/2;
+  const big = !!isChampionship;
+
+  awinTimers.push(setTimeout(()=>{
+    awinSpawnSparks(big?200:140, cx, cy, palette.hot);
+    playResultSound(winner);
+  }, 3350));
+  awinTimers.push(setTimeout(()=>awinSpawnSparks(big?100:70, cx, cy, '#ffffff'), 3450));
+  awinTimers.push(setTimeout(()=>awinSpawnConfetti(big?220:160, palette.confetti, canvas), 3700));
+  awinTimers.push(setTimeout(()=>awinSpawnConfetti(big?170:120, palette.confetti, canvas), 4600));
+  awinTimers.push(setTimeout(()=>awinSpawnConfetti(big?130:90, palette.confetti, canvas), 5800));
+  awinSparkTimer = setInterval(()=>{
+    awinSpawnSparks(4, Math.random()*canvas.width, canvas.height*(.55+Math.random()*.4), palette.hot);
+  }, 260);
+  awinTimers.push(setTimeout(()=>{ if(awinSparkTimer){ clearInterval(awinSparkTimer); awinSparkTimer=null; } }, 3300));
+}
+
+/* ============================= RESULT REVEAL ============================= */
 // A synthesized "drum hit" — a low thump plus a short noise snap, standing in for a
 // real drumroll sample. Pitch creeps up on each hit so the tension audibly builds.
 function playDrumHit(t){
@@ -2654,21 +2764,19 @@ function playDrumHit(t){
 }
 const DRUMROLL_INTERVALS_MS = [400,360,320,280,240,200,170,140,115,95];
 const DRUMROLL_INTERVALS_BIG_MS = [440,400,360,320,280,240,210,180,150,125,105,90];
-function flashNeutralGrid(){
-  const stage = document.getElementById('gridChargeStage');
-  if(!stage) return;
-  stage.querySelectorAll('.grid-cell.neutral').forEach(el => {
-    el.classList.remove('flash');
-    void el.offsetWidth;
-    el.classList.add('flash');
-  });
+function flashSuspenseFloor(){
+  const floor = document.querySelector('#gridChargeStage .awin-floor');
+  if(!floor) return;
+  floor.classList.remove('flash');
+  void floor.offsetWidth;
+  floor.classList.add('flash');
 }
 function runDrumroll(big, onComplete){
   const intervals = big ? DRUMROLL_INTERVALS_BIG_MS : DRUMROLL_INTERVALS_MS;
   let i = 0;
   function hit(){
     playDrumHit(i/intervals.length);
-    flashNeutralGrid();
+    flashSuspenseFloor();
     i++;
     if(i < intervals.length) setTimeout(hit, intervals[i]);
     else onComplete();
@@ -2715,19 +2823,6 @@ function playHeartbeat(){
     });
   }catch(e){ /* audio unavailable — shake still shows visually */ }
 }
-function triggerTieSpark(overlay){
-  if(!overlay) return;
-  if(Math.random() < S.easterEggConfig.tie/100){
-    playOneShot(AUDIO_SRC.eggTie, 0.9);
-  } else {
-    playZapSound();
-  }
-  const el = document.createElement('div');
-  el.className = 'tie-spark-overlay';
-  el.innerHTML = `<div class="tie-spark-flicker"></div><div class="tie-spark-text">⚡ SHORT CIRCUIT ⚡</div>`;
-  overlay.appendChild(el);
-  setTimeout(() => el.remove(), 650);
-}
 function triggerCloseGameTension(overlay){
   if(!overlay) return;
   playHeartbeat();
@@ -2736,33 +2831,6 @@ function triggerCloseGameTension(overlay){
   overlay.classList.add('overlay-shake');
 }
 
-/* Circuit breaker reveal — reserved for the Grand Finals championship-deciding match.
-   Breaker panels trip inward from the edges toward the center, building to a
-   full-screen overload flash before the result is revealed. */
-const BREAKER_COLS = 9, BREAKER_ROWS = 5, BREAKER_CELL_ANIM_MS = 900, BREAKER_STEP_MS = 55, BREAKER_FLASH_MS = 550;
-function buildCircuitBreakerHTML(colorClass){
-  const cx = (BREAKER_COLS-1)/2, cy = (BREAKER_ROWS-1)/2;
-  const maxDist = Math.max(cx, cy);
-  let cells = '';
-  for(let r=0; r<BREAKER_ROWS; r++){
-    for(let c=0; c<BREAKER_COLS; c++){
-      const dist = Math.max(Math.abs(c-cx), Math.abs(r-cy));
-      const delay = Math.round((maxDist-dist)*BREAKER_STEP_MS);
-      cells += `<div class="breaker-cell ${colorClass}" style="animation-delay:${delay}ms"><div class="breaker-lever" style="animation-delay:${delay}ms"></div></div>`;
-    }
-  }
-  const flashDelay = Math.round(maxDist*BREAKER_STEP_MS) + BREAKER_CELL_ANIM_MS;
-  return `
-    <div class="breaker-cell-grid">${cells}</div>
-    <div class="breaker-kicker" style="animation-duration:${flashDelay}ms">⚡ CIRCUIT OVERLOAD ⚡</div>
-    <div class="breaker-flash-layer" style="animation-delay:${flashDelay}ms"></div>
-  `;
-}
-function breakerTotalMs(){
-  const cx = (BREAKER_COLS-1)/2, cy = (BREAKER_ROWS-1)/2;
-  const maxDist = Math.max(cx, cy);
-  return Math.round(maxDist*BREAKER_STEP_MS) + BREAKER_CELL_ANIM_MS + BREAKER_FLASH_MS;
-}
 function openResultReveal(){
   const pr = S.pendingReveal;
   if(!pr) return;
@@ -2773,94 +2841,29 @@ function openResultReveal(){
   const isChampionship = isFinal && !!(S.finals && S.finals.champion && S.finals.champion===m.winner);
   const root = document.getElementById('revealRoot');
   if(!root) return;
-  const colorClass = m.winner==='tie' ? 'gold' : m.winner;
   const DRUMROLL_START_DELAY_MS = 400;
   root.innerHTML = `
-  <div class="live-results-overlay" id="liveResultsOverlay">
+  <div class="live-results-overlay" id="liveResultsOverlay" style="--ally:${AWIN_NEUTRAL.ally};--ally-hot:${AWIN_NEUTRAL.hot}">
     <canvas id="confettiCanvas"></canvas>
-    <div class="grid-charge-stage" id="gridChargeStage">${buildNeutralGridHTML()}</div>
-    <div class="live-results-content" id="revealContent" style="opacity:0;transition:opacity .5s ease;"></div>
+    <div class="awin-stage" id="gridChargeStage">
+      <div class="awin-floor suspense"></div>
+      <div class="drum-kicker">DETERMINING WINNER…</div>
+    </div>
+    <div class="live-results-content" id="revealContent"></div>
   </div>`;
   setTimeout(() => {
     runDrumroll(isChampionship, () => {
-      const stage = document.getElementById('gridChargeStage');
       const overlay = document.getElementById('liveResultsOverlay');
       const closeGame = m.winner!=='tie' && Math.max(m.redScore,m.blueScore)>0 &&
         (Math.abs(m.redScore-m.blueScore)/Math.max(m.redScore,m.blueScore)) <= 0.15;
-      if(m.winner==='tie'){
-        triggerTieSpark(overlay);
-      } else if(closeGame){
-        triggerCloseGameTension(overlay);
-      }
-      if(isChampionship){
-        if(stage){ stage.className = 'breaker-charge-stage'; stage.innerHTML = buildCircuitBreakerHTML(colorClass); }
-        setTimeout(() => { renderRevealContent(m, teams, isFinal, pr); }, breakerTotalMs());
-      } else {
-        if(stage) stage.innerHTML = buildRevealGridHTML(colorClass);
-        setTimeout(() => { renderRevealContent(m, teams, isFinal, pr); }, revealGridTotalMs());
-      }
+      runAllianceWinReveal(m, teams, isFinal, isChampionship, pr, closeGame, overlay);
     });
   }, DRUMROLL_START_DELAY_MS);
-}
-function renderRevealContent(m, teams, isFinal, pr){
-  const contentEl = document.getElementById('revealContent');
-  if(!contentEl) return;
-  const winner = m.winner;
-  const winnerTeams = winner==='tie' ? null : (winner==='red' ? teams.red : teams.blue);
-  const isChampionship = isFinal && !!(S.finals && S.finals.champion && S.finals.champion===winner);
-
-  let rankChangesHTML = '';
-  if(!isFinal && pr.rankingsBefore && pr.rankingsAfter){
-    const beforeMap = {}; pr.rankingsBefore.forEach((r,i) => { beforeMap[r.team] = {rp:r.rp, rank:i+1}; });
-    const afterMap = {}; pr.rankingsAfter.forEach((r,i) => { afterMap[r.team] = {rp:r.rp, rank:i+1}; });
-    const involved = [...teams.red, ...teams.blue];
-    rankChangesHTML = `<div class="reveal-rank-changes">
-      <div class="reveal-rank-title">Ranking Impact</div>
-      ${involved.map(t => {
-        const b = beforeMap[t] || {rp:0, rank:'—'};
-        const a = afterMap[t] || {rp:0, rank:'—'};
-        let arrow = '<span class="rank-same">–</span>';
-        if(typeof a.rank==='number' && typeof b.rank==='number'){
-          arrow = a.rank<b.rank ? '<span class="rank-up">▲</span>' : (a.rank>b.rank ? '<span class="rank-down">▼</span>' : '<span class="rank-same">–</span>');
-        }
-        return `<div class="reveal-rank-row">
-          <span class="reveal-rank-team">${escapeHtml(t)}</span>
-          <span class="reveal-rank-rp">${b.rp} → ${a.rp} RP</span>
-          <span class="reveal-rank-pos">#${b.rank} → #${a.rank} ${arrow}</span>
-        </div>`;
-      }).join('')}
-    </div>`;
-  }
-
-  contentEl.innerHTML = `
-    ${winner==='tie'
-      ? `<div class="results-tie">TIE MATCH</div>`
-      : isChampionship
-        ? `<div class="champion-kicker-ribbon">🏆 Grand Finals Champions</div>
-           <div class="results-winner champion-flicker ${winner}">${winner.toUpperCase()} ALLIANCE WINS!</div>
-           <div class="results-winner-teams">${winnerTeams.map(escapeHtml).join(' &amp; ')}</div>`
-        : `<div class="results-winner ${winner}">${winner.toUpperCase()} ALLIANCE WINS</div>
-           <div class="results-winner-teams">${winnerTeams.map(escapeHtml).join(' &amp; ')}</div>`}
-    <div class="results-scoreline">
-      <div class="results-score-block red"><span>RED</span><b>${m.redScore}</b>${!isFinal ? `<small>+${m.redRP} RP</small>` : ''}</div>
-      <div class="results-score-block blue"><span>BLUE</span><b>${m.blueScore}</b>${!isFinal ? `<small>+${m.blueRP} RP</small>` : ''}</div>
-    </div>
-    ${rankChangesHTML}
-    <button class="btn-primary" style="margin-top:22px;" onclick="closeResultReveal()">Done</button>
-  `;
-  contentEl.style.opacity = '1';
-  if(winner && winner!=='tie'){
-    setTimeout(() => launchConfetti(winner, isChampionship), 60);
-    if(Math.random() < S.easterEggConfig.win/100){
-      playOneShot(winner==='red' ? AUDIO_SRC.eggRedWin : AUDIO_SRC.eggBlueWin, 0.9);
-    } else {
-      playOneShot(AUDIO_SRC.win, 0.9);
-    }
-  }
 }
 function closeResultReveal(){
   S.pendingReveal = null;
   saveState();
+  stopAwinFx();
   const root = document.getElementById('revealRoot');
   if(root) root.innerHTML = '';
   renderApp();
