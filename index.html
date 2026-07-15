@@ -684,6 +684,20 @@
     100%{background:var(--cell-color);opacity:0.28;box-shadow:0 0 5px var(--cell-color);}
   }
 
+  /* Drumroll build-up — plain gray cells that flash in unison before the winner's color lands */
+  .grid-cell.neutral{background:var(--panel-3);opacity:0.22;animation:none;}
+  .grid-cell.neutral.flash{animation:neutralFlash 0.3s ease;}
+  @keyframes neutralFlash{
+    0%{opacity:0.22;box-shadow:none;}
+    35%{opacity:0.95;background:rgba(255,255,255,0.5);box-shadow:0 0 14px rgba(255,255,255,0.4);}
+    100%{opacity:0.22;background:var(--panel-3);box-shadow:none;}
+  }
+  .drum-kicker{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;
+    font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;letter-spacing:0.2em;
+    color:var(--text-dim);text-shadow:0 0 14px rgba(255,255,255,0.25);white-space:nowrap;
+  }
+
   /* ---------- CIRCUIT BREAKER REVEAL (Grand Finals championship) ---------- */
   .breaker-charge-stage{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
   .breaker-cell-grid{
@@ -2477,6 +2491,66 @@ function revealGridTotalMs(){
   const cx = (REVEAL_GRID_COLS-1)/2, cy = (REVEAL_GRID_ROWS-1)/2;
   return Math.round((cx+cy)*REVEAL_STEP_MS) + REVEAL_CELL_ANIM_MS;
 }
+function buildNeutralGridHTML(){
+  return `<div class="drum-kicker" id="drumKicker">DETERMINING WINNER…</div>` +
+    Array(REVEAL_GRID_COLS*REVEAL_GRID_ROWS).fill('<div class="grid-cell neutral"></div>').join('');
+}
+// A synthesized "drum hit" — a low thump plus a short noise snap, standing in for a
+// real drumroll sample. Pitch creeps up on each hit so the tension audibly builds.
+function playDrumHit(t){
+  if(!isSoundOn()) return;
+  const ctx = ensureAudioCtx();
+  if(!ctx) return;
+  try{
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    const basePitch = 85 + t*45;
+    osc.frequency.setValueAtTime(basePitch, now);
+    osc.frequency.exponentialRampToValueAtTime(basePitch*0.6, now+0.1);
+    gain.gain.setValueAtTime(0.5, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now+0.13);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now); osc.stop(now+0.15);
+
+    const bufSec = 0.05;
+    const bufSize = Math.round(ctx.sampleRate*bufSec);
+    const buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0; i<bufSize; i++) data[i] = (Math.random()*2-1) * (1 - i/bufSize);
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.22, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now+bufSec);
+    noise.connect(noiseGain).connect(ctx.destination);
+    noise.start(now);
+  }catch(e){ /* audio unavailable — drumroll still works visually */ }
+}
+const DRUMROLL_INTERVALS_MS = [400,360,320,280,240,200,170,140,115,95];
+const DRUMROLL_INTERVALS_BIG_MS = [440,400,360,320,280,240,210,180,150,125,105,90];
+function flashNeutralGrid(){
+  const stage = document.getElementById('gridChargeStage');
+  if(!stage) return;
+  stage.querySelectorAll('.grid-cell.neutral').forEach(el => {
+    el.classList.remove('flash');
+    void el.offsetWidth;
+    el.classList.add('flash');
+  });
+}
+function runDrumroll(big, onComplete){
+  const intervals = big ? DRUMROLL_INTERVALS_BIG_MS : DRUMROLL_INTERVALS_MS;
+  let i = 0;
+  function hit(){
+    playDrumHit(i/intervals.length);
+    flashNeutralGrid();
+    i++;
+    if(i < intervals.length) setTimeout(hit, intervals[i]);
+    else onComplete();
+  }
+  hit();
+}
 
 /* Circuit breaker reveal — reserved for the Grand Finals championship-deciding match.
    Breaker panels trip inward from the edges toward the center, building to a
@@ -2516,24 +2590,25 @@ function openResultReveal(){
   const root = document.getElementById('revealRoot');
   if(!root) return;
   const colorClass = m.winner==='tie' ? 'gold' : m.winner;
-  const REVEAL_START_DELAY_MS = 500;
-  const CHAMPIONSHIP_START_DELAY_MS = 1400;
+  const DRUMROLL_START_DELAY_MS = 400;
   root.innerHTML = `
   <div class="live-results-overlay">
     <canvas id="confettiCanvas"></canvas>
-    <div class="${isChampionship ? 'breaker-charge-stage' : 'grid-charge-stage'}" id="gridChargeStage"></div>
+    <div class="grid-charge-stage" id="gridChargeStage">${buildNeutralGridHTML()}</div>
     <div class="live-results-content" id="revealContent" style="opacity:0;transition:opacity .5s ease;"></div>
   </div>`;
   setTimeout(() => {
-    const stage = document.getElementById('gridChargeStage');
-    if(isChampionship){
-      if(stage) stage.innerHTML = buildCircuitBreakerHTML(colorClass);
-      setTimeout(() => { renderRevealContent(m, teams, isFinal, pr); }, breakerTotalMs());
-    } else {
-      if(stage) stage.innerHTML = buildRevealGridHTML(colorClass);
-      setTimeout(() => { renderRevealContent(m, teams, isFinal, pr); }, revealGridTotalMs());
-    }
-  }, isChampionship ? CHAMPIONSHIP_START_DELAY_MS : REVEAL_START_DELAY_MS);
+    runDrumroll(isChampionship, () => {
+      const stage = document.getElementById('gridChargeStage');
+      if(isChampionship){
+        if(stage){ stage.className = 'breaker-charge-stage'; stage.innerHTML = buildCircuitBreakerHTML(colorClass); }
+        setTimeout(() => { renderRevealContent(m, teams, isFinal, pr); }, breakerTotalMs());
+      } else {
+        if(stage) stage.innerHTML = buildRevealGridHTML(colorClass);
+        setTimeout(() => { renderRevealContent(m, teams, isFinal, pr); }, revealGridTotalMs());
+      }
+    });
+  }, DRUMROLL_START_DELAY_MS);
 }
 function renderRevealContent(m, teams, isFinal, pr){
   const contentEl = document.getElementById('revealContent');
