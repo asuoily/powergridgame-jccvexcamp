@@ -563,8 +563,9 @@
     position:fixed;inset:0;z-index:100;
     background:radial-gradient(ellipse at top, #14181f 0%, #0B0D12 60%);
     display:flex;flex-direction:column;align-items:center;
-    padding:22px 18px 34px;overflow-y:auto;animation:fadeIn .2s ease both;
+    padding:22px 18px 34px;overflow-y:auto;
   }
+  .live-overlay.live-fade-in{animation:fadeIn .2s ease both;}
   .live-topbar{width:100%;max-width:900px;display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
   .live-topbar-actions{display:flex;align-items:center;gap:8px;}
   .live-label{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;letter-spacing:0.1em;color:var(--text-dim);text-transform:uppercase;}
@@ -638,7 +639,9 @@
   .countdown-overlay{
     position:fixed;inset:0;z-index:110;background:rgba(6,7,10,0.85);
     display:flex;align-items:center;justify-content:center;
+    transition:opacity .18s ease;
   }
+  .countdown-overlay.countdown-exit{opacity:0;}
   .countdown-num{
     font-family:'Rajdhani',sans-serif;font-weight:700;font-size:220px;color:var(--gold);
     text-shadow:0 0 60px rgba(242,183,5,0.5);
@@ -706,8 +709,13 @@
     -webkit-mask-image:linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
             mask-image:linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
   }
-  .awin-playing .awin-floor{animation:awinFloorIn 2.4s ease-out forwards, awinFloorPulse 2.6s 2.6s ease-in-out infinite}
-  @keyframes awinFloorIn{0%{opacity:0;background-position:0 240px,0 0}100%{opacity:.34;background-position:0 0,0 0}}
+  .awin-playing .awin-floor{animation:awinFloorIn 2.4s linear forwards, awinFloorPulse 2.6s 2.6s ease-in-out infinite}
+  @keyframes awinFloorIn{
+    0%{opacity:0;background-position:0 240px,0 0}
+    8%{opacity:.32;} 14%{opacity:.06;} 20%{opacity:.4;} 27%{opacity:.1;}
+    38%{opacity:.46;} 50%{opacity:.22;} 65%{opacity:.5;} 78%{opacity:.28;}
+    100%{opacity:.34;background-position:0 0,0 0}
+  }
   @keyframes awinFloorPulse{0%,100%{opacity:.34}50%{opacity:.52}}
   .awin-spot{position:absolute;top:-24%;width:34vw;height:150%;
     background:linear-gradient(color-mix(in srgb, var(--text) 9%, transparent), transparent 72%);
@@ -722,7 +730,11 @@
     background:linear-gradient(90deg, transparent, var(--ally-hot) 55%, #fff);
     border-radius:2px;opacity:0;transform-origin:100% 50%;
     filter:drop-shadow(0 0 6px var(--ally-hot))}
-  .awin-playing .awin-streak{animation:awinConverge 1.15s cubic-bezier(.7,0,.9,.4) forwards}
+  .awin-streak.corner{
+    height:5px;width:62vmax;
+    filter:drop-shadow(0 0 10px var(--ally-hot)) drop-shadow(0 0 20px var(--ally-hot));
+  }
+  .awin-playing .awin-streak{animation:awinConverge .85s cubic-bezier(.7,0,.9,.4) forwards}
   @keyframes awinConverge{
     0%{opacity:0;transform:rotate(var(--a)) translateX(0) scaleX(1)}
     12%{opacity:1}
@@ -2269,6 +2281,7 @@ function stopMatchMusic(){
 
 /* ============================= LIVE MATCH ============================= */
 let live = null; // {type, index, phase:'idle'|'countdown'|'running'|'ended', elapsedSec, startTs, countdownVal, timerHandle, countdownHandle}
+let liveFirstRender = true;
 
 const liveStatFields = [
   ['Lower Switch','lowerSwitch',10],
@@ -2290,6 +2303,7 @@ function getLiveTeams(){
 function openLive(type, index){
   const durationSec = (S.matchConfig && S.matchConfig.durationSec) || 120;
   live = {type, index, phase:'idle', elapsedSec:0, startTs:null, countdownVal:3, timerHandle:null, countdownHandle:null, durationSec, autoEnded:false, lastFinalCountdown:null, warn30Played:false};
+  liveFirstRender = true;
   renderLive();
 }
 function confirmExitLive(){
@@ -2351,7 +2365,7 @@ function renderLive(){
   const blueScore = allianceScore(m.blueStats);
 
   root.innerHTML = `
-  <div class="live-overlay">
+  <div class="live-overlay ${liveFirstRender ? 'live-fade-in' : ''}">
     <div class="live-topbar">
       <span class="live-label">${label}</span>
       <div class="live-topbar-actions">
@@ -2392,6 +2406,7 @@ function renderLive(){
   </div>
   ${live.phase==='countdown' ? `<div class="countdown-overlay"><div class="countdown-num pulse" id="countdownNum">${live.countdownVal}</div></div>` : ''}
   `;
+  liveFirstRender = false;
 }
 function liveStep(side, field, delta, max){
   const m = getLiveMatch();
@@ -2437,7 +2452,13 @@ function startLiveCountdown(){
     } else {
       clearInterval(live.countdownHandle);
       live.countdownHandle = null;
-      startLiveRunning();
+      const overlay = document.querySelector('.countdown-overlay');
+      if(overlay){
+        overlay.classList.add('countdown-exit');
+        setTimeout(startLiveRunning, 180);
+      } else {
+        startLiveRunning();
+      }
     }
   }, 1000);
 }
@@ -2615,11 +2636,16 @@ function stopAwinFx(){
 }
 function buildAwinStreaksHTML(){
   let html = '';
-  for(let i=0;i<10;i++){
-    const angle = (i*36 + (Math.random()*14-7));
-    const delay = (2.15 + Math.random()*0.9);
+  for(let i=0;i<18;i++){
+    const angle = (i*20 + (Math.random()*12-6));
+    const delay = (2.15 + Math.random()*0.7);
     html += `<div class="awin-streak" style="--a:${angle}deg;animation-delay:${delay}s"></div>`;
   }
+  // Extra bright beams aimed at the four screen corners, for a stronger diagonal burst.
+  [45,135,225,315].forEach((angle,i) => {
+    const delay = 2.1 + i*0.05;
+    html += `<div class="awin-streak corner" style="--a:${angle}deg;animation-delay:${delay}s"></div>`;
+  });
   return html;
 }
 function buildRankChangesHTML(teams, pr){
@@ -2708,6 +2734,7 @@ function runAllianceWinReveal(m, teams, isFinal, isChampionship, pr, closeGame, 
     overlay.classList.add('awin-playing');
   }
 
+  playTensionRiser(3.3);
   awinFit();
   const canvas = document.getElementById('confettiCanvas');
   awinRaf = requestAnimationFrame(awinTick);
@@ -2723,8 +2750,8 @@ function runAllianceWinReveal(m, teams, isFinal, isChampionship, pr, closeGame, 
   awinTimers.push(setTimeout(()=>awinSpawnConfetti(big?170:120, palette.confetti, canvas), 4600));
   awinTimers.push(setTimeout(()=>awinSpawnConfetti(big?130:90, palette.confetti, canvas), 5800));
   awinSparkTimer = setInterval(()=>{
-    awinSpawnSparks(4, Math.random()*canvas.width, canvas.height*(.55+Math.random()*.4), palette.hot);
-  }, 260);
+    awinSpawnSparks(10, Math.random()*canvas.width, canvas.height*(.5+Math.random()*.45), palette.hot);
+  }, 140);
   awinTimers.push(setTimeout(()=>{ if(awinSparkTimer){ clearInterval(awinSparkTimer); awinSparkTimer=null; } }, 3300));
 }
 
@@ -2822,6 +2849,26 @@ function playHeartbeat(){
       osc.start(t); osc.stop(t+0.16);
     });
   }catch(e){ /* audio unavailable — shake still shows visually */ }
+}
+// A rising pitch/volume riser that builds under the streak convergence, paying off right as
+// the flash hits — gives the buildup an audible sense of climbing tension, not just silence.
+function playTensionRiser(durationSec){
+  if(!isSoundOn()) return;
+  const ctx = ensureAudioCtx();
+  if(!ctx) return;
+  try{
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(90, now);
+    osc.frequency.exponentialRampToValueAtTime(440, now+durationSec);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.22, now+durationSec*0.85);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now+durationSec+0.15);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now); osc.stop(now+durationSec+0.2);
+  }catch(e){ /* audio unavailable — buildup still works visually */ }
 }
 function triggerCloseGameTension(overlay){
   if(!overlay) return;
