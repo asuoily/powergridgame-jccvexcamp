@@ -573,6 +573,27 @@
   .live-exit-btn:hover{border-color:var(--red);color:var(--red);}
   .live-sound-btn{background:var(--panel-2);border:1px solid var(--border);color:var(--text-dim);padding:7px 10px;border-radius:8px;font-size:14px;line-height:1;}
   .live-sound-btn:hover{border-color:var(--gold);color:var(--gold);}
+  .live-qr-btn{background:var(--panel-2);border:1px solid var(--border);color:var(--text-dim);padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;}
+  .live-qr-btn:hover{border-color:var(--gold);color:var(--gold);}
+
+  /* ---------- QR MODAL ---------- */
+  #qrModalRoot .modal-overlay{z-index:150;} /* must sit above .live-overlay (z-index:100) since it opens during a live match */
+  .qr-modal-box{max-width:340px;text-align:center;}
+  .qr-modal-note{font-size:12.5px;color:var(--text-faint);margin-bottom:18px;line-height:1.4;}
+  .qr-modal-single{border-radius:12px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:8px;background:var(--panel-3);border:1px solid var(--border);}
+  .qr-modal-single svg{width:100%;max-width:220px;height:auto;background:#fff;border-radius:6px;padding:6px;}
+
+  /* ---------- REFEREE MOBILE VIEW ---------- */
+  .ref-view{
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;
+    padding:24px 16px 40px;gap:18px;
+    background:radial-gradient(ellipse at top, #14181f 0%, #0B0D12 60%);
+  }
+  .ref-card{background:var(--panel-2);border:1px solid var(--border);border-radius:16px;padding:24px;text-align:center;max-width:400px;margin:auto;}
+  .ref-header{text-align:center;}
+  .ref-match-label{font-family:'Rajdhani',sans-serif;font-size:13px;letter-spacing:0.1em;color:var(--text-faint);}
+  .ref-teams{font-size:14px;color:var(--text-dim);margin-top:4px;}
+  .ref-status{font-size:13px;font-weight:600;color:var(--gold);background:var(--panel-3);border-radius:10px;padding:8px 16px;text-align:center;}
   .live-timer-label{
     font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:0.14em;
     text-transform:uppercase;color:var(--text-faint);margin-top:4px;
@@ -907,8 +928,15 @@
 <div id="app"></div>
 <div id="liveRoot"></div>
 <div id="revealRoot"></div>
+<div id="qrModalRoot"></div>
 <div class="app-footer">Made with <span class="heart">&#10084;</span> by Eric (mostly Claude)</div>
 
+<!-- Optional cloud sync for phone-based remote scoring. The app works fully offline/single-device
+     without any of this — see firebaseConfig below. Pinned SDK versions so a future Firebase
+     release can't silently break the app mid-event. -->
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
+<script src="qrcode.js"></script>
 <script>
 /* ============================= STATE ============================= */
 function defaultState(){
@@ -928,7 +956,9 @@ function defaultState(){
     rpConfig:{win:2, loss:0, tie:1, powerShareBonus:2, doubleClimbBonus:2, orbBatteryBonus:1, orbCapacitorBonus:1, orbBatteryThreshold:4, orbCapacitorThreshold:4, byeFairnessBonus:1},
     matchConfig:{durationSec:120},
     soundEnabled:true,
-    easterEggConfig:{win:50, tie:50, breakTime:15, button:0.1}
+    easterEggConfig:{win:50, tie:50, breakTime:15, button:0.1},
+    swapRedBlue:false,
+    cloudEventId:null
   };
 }
 const STORAGE_KEY = 'fieldControl_powerGridV2_state';
@@ -950,6 +980,8 @@ function loadState(){
         parsed.matchConfig = Object.assign({}, def.matchConfig, parsed.matchConfig||{});
         parsed.easterEggConfig = Object.assign({}, def.easterEggConfig, parsed.easterEggConfig||{});
         if(typeof parsed.soundEnabled !== 'boolean') parsed.soundEnabled = def.soundEnabled;
+        if(typeof parsed.swapRedBlue !== 'boolean') parsed.swapRedBlue = def.swapRedBlue;
+        if(typeof parsed.cloudEventId !== 'string') parsed.cloudEventId = def.cloudEventId;
         return parsed;
       }
     }
@@ -1140,6 +1172,10 @@ function renderSetup(){
           <input type="range" min="4" max="40" step="1" value="${S.numQualMatches}" class="fader" id="matchSlider" style="--fill:${fillPct}%" oninput="onSliderInput(this.value)">
           <div class="slider-ticks"><span>4</span><span>40</span></div>
         </div>
+        <label class="toggle" style="margin:4px 0 14px;">
+          <input type="checkbox" id="swapRedBlueToggle" ${S.swapRedBlue?'checked':''} onchange="S.swapRedBlue=this.checked;saveState();">
+          Swap Red/Blue <span style="color:var(--text-faint);">— check if your physical field has red/blue reversed from what you'd expect. Applies to the whole event, set once here.</span>
+        </label>
         <div class="setup-error" id="setupError"></div>
         <button class="start-btn" onclick="startTournament()">Generate Schedule →</button>
       </div>
@@ -1177,6 +1213,9 @@ function startTournament(){
   if(names.length<4 || names.length>8){ errBox.textContent = 'Choose between 4 and 8 teams.'; return; }
   S.teams = names;
   S.qualMatches = generateSchedule(names, S.numQualMatches);
+  if(S.swapRedBlue){
+    S.qualMatches.forEach(m => { const tmp = m.red; m.red = m.blue; m.blue = tmp; });
+  }
   S.stage = 'tournament';
   S.activeTab = 'schedule';
   renderApp();
@@ -1376,6 +1415,7 @@ function renderTournament(){
           </div>
           <button class="rules-btn" onclick="toggleTimerBar()">${timerBarVisible ? 'Hide Timer' : '⏱ Break Timer'}</button>
           <button class="rules-btn" onclick="toggleRules()">${S.showRules ? 'Hide Rules' : 'Scoring Rules'}</button>
+          ${fbEnabled ? `<button class="rules-btn" onclick="openQrModal()" title="One QR code referees can scan for the whole event">📱 Referee QR</button>` : ''}
           <button class="reset-btn" onclick="resetAll()">New Event</button>
         </div>
         ${timerBarVisible ? renderTimerBarHTML() : ''}
@@ -2349,8 +2389,11 @@ function getLiveTeams(){
 }
 function openLive(type, index){
   const durationSec = (S.matchConfig && S.matchConfig.durationSec) || 120;
-  live = {type, index, phase:'idle', elapsedSec:0, startTs:null, countdownVal:3, timerHandle:null, countdownHandle:null, durationSec, autoEnded:false, lastFinalCountdown:null, warn30Played:false};
+  const sessionId = getCloudEventId();
+  live = {type, index, phase:'idle', elapsedSec:0, startTs:null, countdownVal:3, timerHandle:null, countdownHandle:null, durationSec, autoEnded:false, lastFinalCountdown:null, warn30Played:false, sessionId};
   liveFirstRender = true;
+  fbCreateSession(sessionId, getLiveMatch(), getLiveTeams(), durationSec);
+  fbSubscribe(sessionId);
   renderLive();
 }
 function confirmExitLive(){
@@ -2382,11 +2425,13 @@ function closeLive(){
   if(live){
     if(live.timerHandle) clearInterval(live.timerHandle);
     if(live.countdownHandle) clearInterval(live.countdownHandle);
+    fbDeleteSession(live.sessionId);
   }
   stopMatchMusic();
   live = null;
   const root = document.getElementById('liveRoot');
   if(root) root.innerHTML = '';
+  closeQrModal();
   renderApp();
 }
 function liveStepBtnsHTML(side, stats){
@@ -2417,6 +2462,7 @@ function renderLive(){
       <span class="live-label">${label}</span>
       <div class="live-topbar-actions">
         <button class="live-sound-btn" onclick="toggleSound()" title="${isSoundOn() ? 'Mute match sounds' : 'Unmute match sounds'}">${isSoundOn() ? '🔊' : '🔇'}</button>
+        ${fbEnabled ? `<button class="live-qr-btn" onclick="openQrModal()" title="Show referee QR codes for phone scoring">📱 Referee QR</button>` : ''}
         ${(live.phase==='idle' || live.phase==='countdown') ? `<button class="live-exit-btn" onclick="confirmExitLive()">✕ Exit</button>` : ''}
       </div>
     </div>
@@ -2466,6 +2512,7 @@ function liveStep(side, field, delta, max){
   if(el) el.textContent = v;
   liveUpdateScores();
   saveState();
+  if(live.sessionId) fbApplyDelta(live.sessionId, side, field, delta, max);
 }
 function liveUpdateScores(){
   const m = getLiveMatch();
@@ -2482,12 +2529,14 @@ function liveUpdateScores(){
     const result = computeScoreAndRP(m.redStats, m.blueStats, m.powerShare, m.doubleClimb);
     const redRPEl = document.getElementById('liveRedRP'); if(redRPEl) redRPEl.textContent = '+'+result.redRP+' RP';
     const blueRPEl = document.getElementById('liveBlueRP'); if(blueRPEl) blueRPEl.textContent = '+'+result.blueRP+' RP';
+    if(live.sessionId) fbSetBonus(live.sessionId, m.powerShare, m.doubleClimb);
   }
   saveState();
 }
 function startLiveCountdown(){
   live.phase = 'countdown';
   live.countdownVal = 3;
+  if(live.sessionId) fbSetPhase(live.sessionId, 'countdown');
   renderLive();
   playCountdownChime(live.countdownVal);
   live.countdownHandle = setInterval(() => {
@@ -2513,6 +2562,7 @@ function startLiveRunning(){
   live.phase = 'running';
   live.elapsedSec = 0;
   live.startTs = Date.now();
+  if(live.sessionId) fbSetPhase(live.sessionId, 'running');
   renderLive();
   playOneShot(AUDIO_SRC.start, 0.9);
   startMatchMusic();
@@ -2578,6 +2628,7 @@ function endLiveMatch(){
   const m = getLiveMatch();
   m.durationSec = live.elapsedSec;
   live.phase = 'ended';
+  if(live.sessionId) fbSetPhase(live.sessionId, 'ended');
   saveState();
   renderLive();
 }
@@ -3023,8 +3074,258 @@ function closeResultReveal(){
   renderApp();
 }
 
+/* ============================= CLOUD SYNC (optional phone scoring) =============================
+   Lets referees enter stats from their own phones during a live match, syncing to this screen in
+   real time via Firebase Realtime Database. Entirely optional — if firebaseConfig below is left
+   as the placeholder, none of this activates and the app behaves exactly as it always has.
+   To enable: create a free project at https://console.firebase.google.com, enable Realtime
+   Database, register a web app, and paste the config object it gives you in place of the one
+   below, then paste the security rules from the project README into the Realtime Database
+   Rules tab. */
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY_HERE",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID"
+};
+let fbEnabled = false;
+let fbDb = null;
+function fbInit(){
+  if(!firebaseConfig.apiKey || firebaseConfig.apiKey === 'YOUR_API_KEY_HERE') return;
+  try{
+    firebase.initializeApp(firebaseConfig);
+    fbDb = firebase.database();
+    fbEnabled = true;
+  }catch(e){ fbEnabled = false; /* misconfigured — app still works single-device */ }
+}
+fbInit();
+function genSessionId(){
+  return Math.random().toString(36).slice(2,8) + Date.now().toString(36).slice(-4);
+}
+// One stable ID per event (not per match) so the referee QR code only needs to be scanned once —
+// every match reuses the same Firebase path and the remote view just follows along.
+function getCloudEventId(){
+  if(!S.cloudEventId){ S.cloudEventId = genSessionId(); saveState(); }
+  return S.cloudEventId;
+}
+function fbSessionRef(sessionId){
+  return fbDb.ref('sessions/'+sessionId);
+}
+function fbCreateSession(sessionId, m, teams, durationSec){
+  if(!fbEnabled) return;
+  fbSessionRef(sessionId).set({
+    matchLabel: (live.type==='final' ? 'GRAND FINALS · MATCH ' : 'MATCH ') + m.matchNum,
+    isFinal: live.type==='final',
+    redTeams: teams.red, blueTeams: teams.blue,
+    phase: 'idle', durationSec: durationSec||0,
+    redStats: m.redStats, blueStats: m.blueStats,
+    powerShare: !!m.powerShare, doubleClimb: !!m.doubleClimb,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+  }).catch(()=>{});
+}
+let fbListenerRef = null;
+function fbSubscribe(sessionId){
+  if(!fbEnabled) return;
+  fbUnsubscribe();
+  fbListenerRef = fbSessionRef(sessionId);
+  fbListenerRef.on('value', snap => fbHandleRemoteUpdate(snap.val()));
+}
+function fbUnsubscribe(){
+  if(fbListenerRef){ fbListenerRef.off(); fbListenerRef = null; }
+}
+function fbApplyDelta(sessionId, side, field, delta, max){
+  if(!fbEnabled) return;
+  fbSessionRef(sessionId).child(side+'Stats/'+field).transaction(cur => {
+    let v = (cur||0) + delta;
+    if(v<0) v = 0;
+    if(max!=null && v>max) v = max;
+    return v;
+  });
+}
+function fbSetPhase(sessionId, phase){
+  if(!fbEnabled || !sessionId) return;
+  fbSessionRef(sessionId).update({phase}).catch(()=>{});
+}
+function fbSetDuration(sessionId, durationSec){
+  if(!fbEnabled || !sessionId) return;
+  fbSessionRef(sessionId).update({durationSec}).catch(()=>{});
+}
+function fbSetBonus(sessionId, powerShare, doubleClimb){
+  if(!fbEnabled || !sessionId) return;
+  fbSessionRef(sessionId).update({powerShare, doubleClimb}).catch(()=>{});
+}
+function fbDeleteSession(sessionId){
+  if(!fbEnabled || !sessionId) return;
+  fbUnsubscribe();
+  fbSessionRef(sessionId).remove().catch(()=>{});
+}
+// Reconciles a remote change (from a referee's phone) into local state. Never writes back to
+// Firebase from here — that's the one rule that prevents an echo loop between devices.
+function fbHandleRemoteUpdate(data){
+  if(!data || !live) return;
+  const m = getLiveMatch();
+  if(!m) return;
+  // A referee's phone can request phase changes directly (no local `live` state of its own).
+  // Only act if this device hasn't already made the same transition locally, otherwise the
+  // echo of our own write would re-trigger the timer/audio a second time.
+  if(data.phase === 'countdown' && live.phase === 'idle'){
+    startLiveCountdown();
+  } else if(data.phase === 'ended' && live.phase === 'running'){
+    endLiveMatch();
+  }
+  let changed = false;
+  ['red','blue'].forEach(side => {
+    const remoteStats = data[side+'Stats'];
+    if(!remoteStats) return;
+    liveStatFields.forEach(([label,field]) => {
+      const remoteVal = remoteStats[field];
+      if(typeof remoteVal === 'number' && m[side+'Stats'][field] !== remoteVal){
+        m[side+'Stats'][field] = remoteVal;
+        changed = true;
+        const el = document.getElementById(`live_${side}_${field}`);
+        if(el) el.textContent = remoteVal;
+      }
+    });
+  });
+  if(typeof data.powerShare === 'boolean' && data.powerShare !== m.powerShare){
+    m.powerShare = data.powerShare;
+    const ps = document.getElementById('liveDoublePS'); if(ps) ps.checked = data.powerShare;
+    changed = true;
+  }
+  if(typeof data.doubleClimb === 'boolean' && data.doubleClimb !== m.doubleClimb){
+    m.doubleClimb = data.doubleClimb;
+    const dc = document.getElementById('liveDoubleClimb'); if(dc) dc.checked = data.doubleClimb;
+    changed = true;
+  }
+  if(changed) liveUpdateScores();
+}
+function refereeUrl(sessionId){
+  return location.origin + location.pathname + '?ref=' + sessionId;
+}
+function openQrModal(){
+  if(!fbEnabled) return;
+  const root = document.getElementById('qrModalRoot');
+  if(!root) return;
+  const qr = qrcode(0, 'M');
+  qr.addData(refereeUrl(getCloudEventId()));
+  qr.make();
+  root.innerHTML = `
+  <div class="modal-overlay" onclick="closeQrModal()">
+    <div class="modal-box qr-modal-box" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <h3>Remote Control QR Code</h3>
+        <button class="modal-close" onclick="closeQrModal()">&times;</button>
+      </div>
+      <p class="qr-modal-note">Scan this once — it works for every match all day, automatically following whichever match is currently live. Anyone with the link can control the live match, so only share it with your scorekeepers.</p>
+      <div class="qr-modal-single">
+        ${qr.createSvgTag(5, 4)}
+      </div>
+    </div>
+  </div>`;
+}
+function closeQrModal(){
+  const root = document.getElementById('qrModalRoot');
+  if(root) root.innerHTML = '';
+}
+
+/* ---------- Referee mobile view (?ref=<sessionId>) — full remote control ---------- */
+let refSessionId = null;
+function initRefereeMode(sessionId){
+  const root = document.getElementById('app');
+  if(!fbEnabled){
+    if(root) root.innerHTML = `<div class="ref-view"><div class="ref-card"><h2>Cloud sync not set up</h2><p>Ask the scorekeeper to configure phone scoring first.</p></div></div>`;
+    return;
+  }
+  refSessionId = sessionId;
+  fbSessionRef(sessionId).on('value', snap => renderRefereeView(snap.val()));
+}
+function refStep(side, field, delta, max){
+  if(!fbEnabled || !refSessionId) return;
+  fbApplyDelta(refSessionId, side, field, delta, max);
+}
+function refToggleBonus(field, val){
+  if(!fbEnabled || !refSessionId) return;
+  fbSessionRef(refSessionId).update({[field]: val}).catch(()=>{});
+}
+function refSetPhase(phase){
+  if(!fbEnabled || !refSessionId) return;
+  fbSessionRef(refSessionId).update({phase}).catch(()=>{});
+}
+function refStepBtnsHTML(side, stats, phase){
+  const locked = phase!=='running' && phase!=='ended';
+  return liveStatFields.map(([label,field,max]) => `
+    <div class="live-stat-row">
+      <span class="live-stat-label">${label}</span>
+      <div class="live-stepper">
+        <button type="button" class="live-step-btn" ${locked?'disabled':''} onclick="refStep('${side}','${field}',-1,${max})">&minus;</button>
+        <span class="live-step-val">${stats[field]||0}</span>
+        <button type="button" class="live-step-btn" ${locked?'disabled':''} onclick="refStep('${side}','${field}',1,${max})">+</button>
+      </div>
+    </div>`).join('');
+}
+function renderRefereeView(data){
+  const root = document.getElementById('app');
+  if(!root) return;
+  if(!data){
+    root.innerHTML = `<div class="ref-view"><div class="ref-card"><h2>Between matches</h2><p>Waiting for the next match to go live — this page will update automatically, no need to rescan.</p></div></div>`;
+    return;
+  }
+  const isFinal = !!data.isFinal;
+  const redStats = data.redStats || {};
+  const blueStats = data.blueStats || {};
+  const locked = data.phase!=='running' && data.phase!=='ended';
+  const statusText = data.phase==='running' ? 'Match running — go!' :
+    data.phase==='ended' ? 'Match ended — review on the main screen, then confirm there' :
+    data.phase==='countdown' ? 'Get ready…' : 'Ready to start whenever you are';
+  let redRP = 0, blueRP = 0;
+  if(!isFinal){
+    const result = computeScoreAndRP(redStats, blueStats, !!data.powerShare, !!data.doubleClimb);
+    redRP = result.redRP; blueRP = result.blueRP;
+  }
+  root.innerHTML = `
+  <div class="ref-view">
+    <div class="ref-header">
+      <div class="ref-match-label">${escapeHtml(data.matchLabel||'')}</div>
+    </div>
+    <div class="ref-status">${escapeHtml(statusText)}</div>
+    <div class="live-alliances">
+      <div class="live-alliance red">
+        <div class="live-alliance-tag">RED</div>
+        <div class="live-teams-names">${(data.redTeams||[]).map(escapeHtml).join(' &amp; ')}</div>
+        <div class="live-score red">${allianceScore(redStats)}</div>
+        ${!isFinal ? `<div class="live-rp">+${redRP} RP</div>` : ''}
+        <div class="live-steppers">${refStepBtnsHTML('red', redStats, data.phase)}</div>
+      </div>
+      <div class="live-alliance blue">
+        <div class="live-alliance-tag">BLUE</div>
+        <div class="live-teams-names">${(data.blueTeams||[]).map(escapeHtml).join(' &amp; ')}</div>
+        <div class="live-score blue">${allianceScore(blueStats)}</div>
+        ${!isFinal ? `<div class="live-rp">+${blueRP} RP</div>` : ''}
+        <div class="live-steppers">${refStepBtnsHTML('blue', blueStats, data.phase)}</div>
+      </div>
+    </div>
+    ${!isFinal ? `
+    <div class="live-bonuses">
+      <label class="toggle"><input type="checkbox" ${data.powerShare?'checked':''} onchange="refToggleBonus('powerShare', this.checked)" ${locked?'disabled':''}> Power Share <span>+2 RP all</span></label>
+      <label class="toggle"><input type="checkbox" ${data.doubleClimb?'checked':''} onchange="refToggleBonus('doubleClimb', this.checked)" ${locked?'disabled':''}> Double Climb <span>+2 RP all</span></label>
+    </div>` : ''}
+    <div class="live-controls">
+      ${data.phase==='idle' ? `<button class="live-start-btn" onclick="refSetPhase('countdown')">&#9654; Start Match</button>` : ''}
+      ${data.phase==='running' ? `<button class="live-end-btn" onclick="refSetPhase('ended')">&#9632; End Match Early</button>` : ''}
+      ${data.phase==='countdown' ? `<div class="live-countdown-note">Get ready…</div>` : ''}
+      ${data.phase==='ended' ? `<div class="live-countdown-note">Waiting for the scorekeeper to confirm the result…</div>` : ''}
+    </div>
+  </div>`;
+}
+
 /* ============================= INIT ============================= */
-renderApp();
+(function(){
+  const params = new URLSearchParams(location.search);
+  if(params.has('ref')){
+    initRefereeMode(params.get('ref'));
+  } else {
+    renderApp();
+  }
+})();
 </script>
 </body>
 </html>
