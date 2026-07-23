@@ -1220,6 +1220,31 @@ function startTournament(){
   S.activeTab = 'schedule';
   renderApp();
 }
+// Flips red/blue for a schedule that already exists (possibly with scores already entered) —
+// the Team Setup checkbox only affects schedules generated after it's checked, so this is the
+// fix for "the field turned out to be mirrored" discovered mid-event.
+function swapAllRedBlue(){
+  if(live){ alert('Finish or exit the current live match before swapping colors.'); return; }
+  if(!confirm('Swap Red/Blue for every match in this event? Team rosters, scores, and rankings stay the same — only which color each team is shown under flips.')) return;
+  S.qualMatches.forEach(m => {
+    [m.red, m.blue] = [m.blue, m.red];
+    [m.redStats, m.blueStats] = [m.blueStats, m.redStats];
+    [m.redScore, m.blueScore] = [m.blueScore, m.redScore];
+    [m.redRP, m.blueRP] = [m.blueRP, m.redRP];
+    if(m.winner==='red') m.winner='blue'; else if(m.winner==='blue') m.winner='red';
+  });
+  if(S.finals){
+    [S.finals.redAlliance, S.finals.blueAlliance] = [S.finals.blueAlliance, S.finals.redAlliance];
+    S.finals.matches.forEach(m => {
+      [m.redStats, m.blueStats] = [m.blueStats, m.redStats];
+      [m.redScore, m.blueScore] = [m.blueScore, m.redScore];
+      if(m.winner==='red') m.winner='blue'; else if(m.winner==='blue') m.winner='red';
+    });
+    updateFinalsProgress();
+  }
+  saveState();
+  renderApp();
+}
 function resetAll(){
   if(confirm('Start a new event? This clears all current teams, scores, and results.')){
     try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
@@ -1415,6 +1440,7 @@ function renderTournament(){
           </div>
           <button class="rules-btn" onclick="toggleTimerBar()">${timerBarVisible ? 'Hide Timer' : '⏱ Break Timer'}</button>
           <button class="rules-btn" onclick="toggleRules()">${S.showRules ? 'Hide Rules' : 'Scoring Rules'}</button>
+          <button class="rules-btn" onclick="swapAllRedBlue()" title="Field turned out to be mirrored? Flip red/blue for every match, scores and rankings unaffected">🔄 Swap Red/Blue</button>
           ${fbEnabled ? `<button class="rules-btn" onclick="openQrModal()" title="One QR code referees can scan for the whole event">📱 Referee QR</button>` : ''}
           <button class="reset-btn" onclick="resetAll()">New Event</button>
         </div>
@@ -3124,6 +3150,7 @@ function fbCreateSession(sessionId, m, teams, durationSec){
     phase: 'idle', durationSec: durationSec||0,
     redStats: m.redStats, blueStats: m.blueStats,
     powerShare: !!m.powerShare, doubleClimb: !!m.doubleClimb,
+    scoringConfig: S.scoringConfig, rpConfig: S.rpConfig,
     updatedAt: firebase.database.ServerValue.TIMESTAMP
   }).catch(()=>{});
 }
@@ -3274,6 +3301,10 @@ function renderRefereeView(data){
     root.innerHTML = `<div class="ref-view"><div class="ref-card"><h2>Between matches</h2><p>Waiting for the next match to go live — this page will update automatically, no need to rescan.</p></div></div>`;
     return;
   }
+  // allianceScore()/computeScoreAndRP() read scoring rules off S — mirror in whatever the
+  // scorekeeper's device has configured so this phone's numbers can't drift out of sync with it.
+  if(data.scoringConfig) S.scoringConfig = data.scoringConfig;
+  if(data.rpConfig) S.rpConfig = data.rpConfig;
   const isFinal = !!data.isFinal;
   const redStats = data.redStats || {};
   const blueStats = data.blueStats || {};
