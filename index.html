@@ -356,6 +356,25 @@
     animation:riseIn .4s ease both;
   }
 
+  /* ---------- VISUAL RED/BLUE MIRROR ----------
+     Purely cosmetic: flips which screen-side (left/right) the red vs blue box renders on, for when
+     the field's physical orientation doesn't match how this screen is set up. Never touches which
+     team is actually red/blue in the data — see swapAllRedBlue() in the script for that. */
+  body.mirror-rb .alliance-row > .alliance.red{order:3;}
+  body.mirror-rb .alliance-row > .vs{order:2;}
+  body.mirror-rb .alliance-row > .alliance.blue{order:1;}
+  body.mirror-rb .finals-header > .alliance-card.red{order:3;}
+  body.mirror-rb .finals-header > .series-center{order:2;}
+  body.mirror-rb .finals-header > .alliance-card.blue{order:1;}
+  body.mirror-rb .modal-alliances > .modal-alliance.red{order:2;}
+  body.mirror-rb .modal-alliances > .modal-alliance.blue{order:1;}
+  body.mirror-rb .modal-preview > .preview-side.red{order:2;}
+  body.mirror-rb .modal-preview > .preview-side.blue{order:1;}
+  body.mirror-rb .live-alliances > .live-alliance.red{order:2;}
+  body.mirror-rb .live-alliances > .live-alliance.blue{order:1;}
+  body.mirror-rb .results-scoreline > .results-score-block.red{order:2;}
+  body.mirror-rb .results-scoreline > .results-score-block.blue{order:1;}
+
   /* ---------- MODAL ---------- */
   .modal-overlay{
     position:fixed;inset:0;background:rgba(6,7,10,0.72);backdrop-filter:blur(3px);
@@ -961,7 +980,8 @@ function defaultState(){
     soundEnabled:true,
     easterEggConfig:{win:50, tie:50, breakTime:15, button:0.1},
     swapRedBlue:false,
-    cloudEventId:null
+    cloudEventId:null,
+    mirrorRedBlue:false
   };
 }
 const STORAGE_KEY = 'fieldControl_powerGridV2_state';
@@ -981,6 +1001,7 @@ function upgradeState(parsed){
   if(typeof parsed.soundEnabled !== 'boolean') parsed.soundEnabled = def.soundEnabled;
   if(typeof parsed.swapRedBlue !== 'boolean') parsed.swapRedBlue = def.swapRedBlue;
   if(typeof parsed.cloudEventId !== 'string') parsed.cloudEventId = def.cloudEventId;
+  if(typeof parsed.mirrorRedBlue !== 'boolean') parsed.mirrorRedBlue = def.mirrorRedBlue;
   return parsed;
 }
 function loadState(){
@@ -992,6 +1013,15 @@ function loadState(){
     }
   }catch(e){ /* ignore corrupt/unavailable storage */ }
   return defaultState();
+}
+// Purely a display preference — this device only, never synced. Flips which screen-side (left/right)
+// the red vs blue boxes render on, for when the field's physical orientation is mirrored relative to
+// wherever this screen is set up. Never touches team/score/ranking data — see swapAllRedBlue() for that.
+function toggleMirrorRedBlue(){
+  S.mirrorRedBlue = !S.mirrorRedBlue;
+  document.body.classList.toggle('mirror-rb', S.mirrorRedBlue);
+  saveState();
+  if(live) renderLive(); else renderApp();
 }
 function exportEvent(){
   const stamp = new Date().toISOString().slice(0,16).replace(/[:T]/g,'-');
@@ -1030,6 +1060,7 @@ function handleImportFile(input){
   reader.readAsText(file);
 }
 let S = loadState();
+if(S.mirrorRedBlue) document.body.classList.add('mirror-rb');
 const app = document.getElementById('app');
 
 /* ============================= HELPERS ============================= */
@@ -1492,7 +1523,8 @@ function renderTournament(){
           </div>
           <button class="rules-btn" onclick="toggleTimerBar()">${timerBarVisible ? 'Hide Timer' : '⏱ Break Timer'}</button>
           <button class="rules-btn" onclick="toggleRules()">${S.showRules ? 'Hide Rules' : 'Scoring Rules'}</button>
-          <button class="rules-btn" onclick="swapAllRedBlue()" title="Field turned out to be mirrored? Flip red/blue for every match, scores and rankings unaffected">🔄 Swap Red/Blue</button>
+          <button class="rules-btn" onclick="swapAllRedBlue()" title="Field's driver stations wired backwards? Permanently swaps which team is red vs blue for every match — a real data change, scores/rankings unaffected">🔄 Swap Red/Blue</button>
+          <button class="rules-btn" onclick="toggleMirrorRedBlue()" title="Field oriented opposite this screen? Flips which side shows red vs blue on THIS screen only — purely visual, no data changes, doesn't affect other devices">${S.mirrorRedBlue ? '🔀 Un-mirror Display' : '🔀 Mirror Display'}</button>
           ${fbEnabled ? `<button class="rules-btn" onclick="openQrModal()" title="One QR code referees can scan for the whole event">📱 Referee QR</button>` : ''}
           <button class="rules-btn" onclick="exportEvent()" title="Download a backup file of this entire event">⬇ Export Event</button>
           <button class="rules-btn" onclick="triggerImportEvent()" title="Restore an event from a backup file">⬆ Import Event</button>
@@ -2660,6 +2692,7 @@ function renderLive(){
       <span class="live-label">${label}</span>
       <div class="live-topbar-actions">
         <button class="live-sound-btn" onclick="toggleSound()" title="${isSoundOn() ? 'Mute match sounds' : 'Unmute match sounds'}">${isSoundOn() ? '🔊' : '🔇'}</button>
+        <button class="live-qr-btn" onclick="toggleMirrorRedBlue()" title="Field oriented opposite this screen? Flips which side shows red vs blue here only — purely visual">${S.mirrorRedBlue ? '🔀 Un-mirror' : '🔀 Mirror'}</button>
         ${fbEnabled ? `<button class="live-qr-btn" onclick="openQrModal()" title="Show referee QR codes for phone scoring">📱 Referee QR</button>` : ''}
         ${(live.phase==='idle' || live.phase==='countdown') ? `<button class="live-exit-btn" onclick="confirmExitLive()">✕ Exit</button>` : ''}
       </div>
