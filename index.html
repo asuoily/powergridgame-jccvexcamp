@@ -321,9 +321,11 @@
   .seed-pair{border-radius:10px;padding:10px 14px;font-size:13.5px;font-weight:500;text-align:left;}
   .seed-pair.red{background:var(--red-soft);border:1px solid var(--red-border);}
   .seed-pair.blue{background:var(--blue-soft);border:1px solid var(--blue-border);}
+  .seed-pair.gold{background:var(--gold-soft);border:1px solid rgba(242,183,5,0.4);}
   .seed-tag{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:0.1em;margin-right:8px;}
   .seed-pair.red .seed-tag{color:var(--red);}
   .seed-pair.blue .seed-tag{color:var(--blue);}
+  .seed-pair.gold .seed-tag{color:var(--gold);}
   .pick-list{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:480px;margin:0 auto;}
   .pick-btn{
     background:var(--panel-3);border:1px solid var(--border);color:var(--text);
@@ -929,6 +931,7 @@
 <div id="liveRoot"></div>
 <div id="revealRoot"></div>
 <div id="qrModalRoot"></div>
+<input type="file" id="importFileInput" accept="application/json,.json" style="display:none" onchange="handleImportFile(this)">
 <div class="app-footer">Made with <span class="heart">&#10084;</span> by Eric (mostly Claude)</div>
 
 <!-- Optional cloud sync for phone-based remote scoring. The app works fully offline/single-device
@@ -967,26 +970,64 @@ function saveState(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(S));
   }catch(e){ /* storage unavailable — app still works, just won't persist */ }
 }
+// Merges a saved/imported state blob with any config fields added by newer versions of the app,
+// so old exports (or old localStorage saves) don't end up missing fields the current code expects.
+function upgradeState(parsed){
+  const def = defaultState();
+  parsed.scoringConfig = Object.assign({}, def.scoringConfig, parsed.scoringConfig||{});
+  parsed.rpConfig = Object.assign({}, def.rpConfig, parsed.rpConfig||{});
+  parsed.matchConfig = Object.assign({}, def.matchConfig, parsed.matchConfig||{});
+  parsed.easterEggConfig = Object.assign({}, def.easterEggConfig, parsed.easterEggConfig||{});
+  if(typeof parsed.soundEnabled !== 'boolean') parsed.soundEnabled = def.soundEnabled;
+  if(typeof parsed.swapRedBlue !== 'boolean') parsed.swapRedBlue = def.swapRedBlue;
+  if(typeof parsed.cloudEventId !== 'string') parsed.cloudEventId = def.cloudEventId;
+  return parsed;
+}
 function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(raw){
       const parsed = JSON.parse(raw);
-      if(parsed && parsed.stage){
-        // Merge in any newly-added config fields for states saved by older versions
-        const def = defaultState();
-        parsed.scoringConfig = Object.assign({}, def.scoringConfig, parsed.scoringConfig||{});
-        parsed.rpConfig = Object.assign({}, def.rpConfig, parsed.rpConfig||{});
-        parsed.matchConfig = Object.assign({}, def.matchConfig, parsed.matchConfig||{});
-        parsed.easterEggConfig = Object.assign({}, def.easterEggConfig, parsed.easterEggConfig||{});
-        if(typeof parsed.soundEnabled !== 'boolean') parsed.soundEnabled = def.soundEnabled;
-        if(typeof parsed.swapRedBlue !== 'boolean') parsed.swapRedBlue = def.swapRedBlue;
-        if(typeof parsed.cloudEventId !== 'string') parsed.cloudEventId = def.cloudEventId;
-        return parsed;
-      }
+      if(parsed && parsed.stage) return upgradeState(parsed);
     }
   }catch(e){ /* ignore corrupt/unavailable storage */ }
   return defaultState();
+}
+function exportEvent(){
+  const stamp = new Date().toISOString().slice(0,16).replace(/[:T]/g,'-');
+  const blob = new Blob([JSON.stringify(S, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `field-control-backup-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function triggerImportEvent(){
+  const input = document.getElementById('importFileInput');
+  if(input) input.click();
+}
+function handleImportFile(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    input.value = '';
+    let parsed;
+    try{ parsed = JSON.parse(reader.result); }
+    catch(e){ alert("Couldn't read that file — make sure it's a Field Control event backup (.json)."); return; }
+    if(!parsed || typeof parsed.stage !== 'string' || !Array.isArray(parsed.qualMatches)){
+      alert("That file doesn't look like a Field Control event backup.");
+      return;
+    }
+    if(S.stage==='tournament' && !confirm('Import this event? This will replace all current teams, scores, and results.')) return;
+    S = upgradeState(parsed);
+    saveState();
+    renderApp();
+  };
+  reader.readAsText(file);
 }
 let S = loadState();
 const app = document.getElementById('app');
@@ -1234,13 +1275,19 @@ function swapAllRedBlue(){
     if(m.winner==='red') m.winner='blue'; else if(m.winner==='blue') m.winner='red';
   });
   if(S.finals){
-    [S.finals.redAlliance, S.finals.blueAlliance] = [S.finals.blueAlliance, S.finals.redAlliance];
-    S.finals.matches.forEach(m => {
-      [m.redStats, m.blueStats] = [m.blueStats, m.redStats];
-      [m.redScore, m.blueScore] = [m.blueScore, m.redScore];
-      if(m.winner==='red') m.winner='blue'; else if(m.winner==='blue') m.winner='red';
+    const seriesList = S.finals.sixTeamBracket
+      ? [S.finals.semifinal, S.finals.final].filter(Boolean)
+      : [S.finals];
+    seriesList.forEach(series => {
+      [series.redAlliance, series.blueAlliance] = [series.blueAlliance, series.redAlliance];
+      series.matches.forEach(m => {
+        [m.redStats, m.blueStats] = [m.blueStats, m.redStats];
+        [m.redScore, m.blueScore] = [m.blueScore, m.redScore];
+        if(m.winner==='red') m.winner='blue'; else if(m.winner==='blue') m.winner='red';
+      });
+      updateFinalsProgress(series);
     });
-    updateFinalsProgress();
+    checkBracketAdvance();
   }
   saveState();
   renderApp();
@@ -1289,6 +1336,10 @@ function renderLanding(){
           <button class="landing-btn primary" onclick="goToTeamSetup()">
             <span class="landing-btn-title">🏁 Team Setup</span>
             <span class="landing-btn-desc">Build your roster &amp; generate the qualification schedule</span>
+          </button>
+          <button class="landing-btn" onclick="triggerImportEvent()">
+            <span class="landing-btn-title">📂 Import Event</span>
+            <span class="landing-btn-desc">Restore a previously exported backup file</span>
           </button>
         </div>
       </div>
@@ -1364,7 +1415,7 @@ function renderRulesPanel(){
   const mc = S.matchConfig;
   const egg = S.easterEggConfig;
   const durationFillPct = ((mc.durationSec - 30) / (600 - 30)) * 100;
-  const scoredTotal = S.qualMatches.filter(m=>m.scored).length + (S.finals ? S.finals.matches.filter(m=>m.scored).length : 0);
+  const scoredTotal = S.qualMatches.filter(m=>m.scored).length + allFinalsMatches().filter(m=>m.scored).length;
   return `
   <div class="rules-panel">
     <p class="rules-kicker">Power Grid (v2) — Scoring Configuration</p>
@@ -1408,6 +1459,7 @@ function renderRulesPanel(){
     <p class="rules-note">Changes apply immediately to new and unscored matches. Matches that were already scored keep their original results — tap "Rescore" on a match card to recalculate it${scoredTotal>0 ? `, or <a href="#" onclick="event.preventDefault();rescoreAllMatches();" style="color:var(--gold);">Rescore All</a> to recalculate every scored match with the current values` : ' (once matches are scored, you\'ll be able to Rescore All here)'}.</p>
     <h4>Grand Finals</h4>
     <p>The top 2 ranked teams captain the two alliances and draft every other team between them (seed 1 picks first, then seed 2, alternating until everyone is on an alliance) — so every team competes in the Grand Finals. No ranking points — the first alliance to win 2 matches takes the title.</p>
+    <p class="rules-note">With exactly 6 teams, the format changes: seed 3 picks a partner first (from seeds 4-6 only), then seed 2 picks from what's left, then seed 1 automatically gets whoever remains. Seed 1's alliance gets a bye straight to the Grand Finals while seed 2 and seed 3's alliances play a best-of-3 semifinal — the winner then faces seed 1 in a best-of-3 Grand Finals.</p>
     <h4>Easter Egg Odds <span class="rules-edit-note">(tap a value to change it)</span></h4>
     <div class="rules-edit-grid">
       ${eggEditRow('Win egg (red/blue)','win',egg.win)}
@@ -1442,6 +1494,8 @@ function renderTournament(){
           <button class="rules-btn" onclick="toggleRules()">${S.showRules ? 'Hide Rules' : 'Scoring Rules'}</button>
           <button class="rules-btn" onclick="swapAllRedBlue()" title="Field turned out to be mirrored? Flip red/blue for every match, scores and rankings unaffected">🔄 Swap Red/Blue</button>
           ${fbEnabled ? `<button class="rules-btn" onclick="openQrModal()" title="One QR code referees can scan for the whole event">📱 Referee QR</button>` : ''}
+          <button class="rules-btn" onclick="exportEvent()" title="Download a backup file of this entire event">⬇ Export Event</button>
+          <button class="rules-btn" onclick="triggerImportEvent()" title="Restore an event from a backup file">⬆ Import Event</button>
           <button class="reset-btn" onclick="resetAll()">New Event</button>
         </div>
         ${timerBarVisible ? renderTimerBarHTML() : ''}
@@ -1850,15 +1904,17 @@ function teamDashboardCardHTML(d){
 }
 
 /* ============================= RENDER: FINALS TAB ============================= */
-function finalCardHTML(m, idx, f){
-  const pending = !!(S.pendingReveal && S.pendingReveal.type==='final' && S.pendingReveal.index===idx);
+function finalCardHTML(m, idx, f, round){
+  round = round || '';
+  const pending = !!(S.pendingReveal && S.pendingReveal.type==='final' && S.pendingReveal.index===idx && (S.pendingReveal.round||'')===round);
+  const label = round==='semi' ? 'SEMIFINAL' : 'GRAND FINALS';
   return `
-  <div class="match-card final ${m.scored?'scored':''}" ${pending ? '' : `onclick="openScoreModal('final',${idx})"`}>
+  <div class="match-card final ${m.scored?'scored':''}" ${pending ? '' : `onclick="openScoreModal('final',${idx},'${round}')"`}>
     <div class="match-num-row">
-      <div class="match-num">GRAND FINALS · MATCH ${m.matchNum}</div>
+      <div class="match-num">${label} · MATCH ${m.matchNum}</div>
       ${pending ? '' : (!m.scored
-        ? `<button class="live-go-btn" onclick="event.stopPropagation();openLive('final',${idx})">🔴 GO LIVE</button>`
-        : `<button class="rescore-btn" onclick="event.stopPropagation();rescoreMatch('final',${idx})" title="Recalculate this match's score with the current scoring rules">↻ Rescore</button>`)}
+        ? `<button class="live-go-btn" onclick="event.stopPropagation();openLive('final',${idx},'${round}')">🔴 GO LIVE</button>`
+        : `<button class="rescore-btn" onclick="event.stopPropagation();rescoreMatch('final',${idx},'${round}')" title="Recalculate this match's score with the current scoring rules">↻ Rescore</button>`)}
     </div>
     <div class="alliance-row">
       <div class="alliance red">
@@ -1880,6 +1936,29 @@ function finalCardHTML(m, idx, f){
       : `<div class="card-cta">${m.scored ? 'Tap to edit score' : 'Tap to enter score'}</div>`}
   </div>`;
 }
+function renderSeriesSection(title, series, round){
+  let html = `<div class="finals-header">
+    <div class="alliance-card red">
+      <div class="ac-tag">RED ALLIANCE</div>
+      <div class="ac-teams">${series.redAlliance.map(escapeHtml).join(' &amp; ')}</div>
+      <div class="ac-wins">${series.redWins} WIN${series.redWins!==1?'S':''}</div>
+    </div>
+    <div class="series-center"><div class="series-label">${title}</div></div>
+    <div class="alliance-card blue">
+      <div class="ac-tag">BLUE ALLIANCE</div>
+      <div class="ac-teams">${series.blueAlliance.map(escapeHtml).join(' &amp; ')}</div>
+      <div class="ac-wins">${series.blueWins} WIN${series.blueWins!==1?'S':''}</div>
+    </div>
+  </div>`;
+  const pendingThisReveal = !!(S.pendingReveal && S.pendingReveal.type==='final' && (S.pendingReveal.round||'')===round);
+  if(series.champion && !pendingThisReveal){
+    const champTeams = series.champion==='red' ? series.redAlliance : series.blueAlliance;
+    const verb = round==='semi' ? 'advance to the Grand Finals' : 'win the Grand Finals!';
+    html += `<div class="champion-banner">🏆 ${champTeams.map(escapeHtml).join(' &amp; ')} ${verb}</div>`;
+  }
+  html += `<div class="match-grid">${series.matches.map((m,idx) => finalCardHTML(m,idx,series,round)).join('')}</div>`;
+  return html;
+}
 function renderFinalsTab(allScored){
   if(!S.finals){
     if(!allScored){
@@ -1892,6 +1971,18 @@ function renderFinalsTab(allScored){
     }
     const rankings = getRankings();
     if(!S.allianceSelection){
+      if(S.teams.length===6){
+        return `<div class="finals-ready">
+          <h3>Ready for the Grand Finals</h3>
+          <p>With exactly 6 teams, seed 3 picks a partner first (from seeds 4-6 only), then seed 2 picks from what's left, then seed 1 automatically gets whoever remains. Seed 1's alliance gets a bye straight to the Grand Finals while seed 2 and seed 3's alliances play a best-of-3 semifinal — the winner then faces seed 1 in a best-of-3 Grand Finals.</p>
+          <div class="seed-preview">
+            <div class="seed-pair gold"><span class="seed-tag">SEED 1 · BYE</span>${escapeHtml(rankings[0].team)}</div>
+            <div class="seed-pair red"><span class="seed-tag">SEED 2</span>${escapeHtml(rankings[1].team)}</div>
+            <div class="seed-pair blue"><span class="seed-tag">SEED 3</span>${escapeHtml(rankings[2].team)}</div>
+          </div>
+          <button class="btn-primary" onclick="startAllianceSelection()">Begin Alliance Selection</button>
+        </div>`;
+      }
       return `<div class="finals-ready">
         <h3>Ready for the Grand Finals</h3>
         <p>The top 2 ranked teams captain the two alliances and draft every other team between them, alternating picks, so everyone competes in the Grand Finals. ${escapeHtml(rankings[0].team)} (#1) picks first, then ${escapeHtml(rankings[1].team)} (#2), back and forth until all teams are drafted.</p>
@@ -1904,30 +1995,39 @@ function renderFinalsTab(allScored){
     }
     return renderAllianceSelectionUI(rankings);
   }
-  const f = S.finals;
-  let html = `<div class="finals-header">
-    <div class="alliance-card red">
-      <div class="ac-tag">RED ALLIANCE</div>
-      <div class="ac-teams">${f.redAlliance.map(escapeHtml).join(' &amp; ')}</div>
-      <div class="ac-wins">${f.redWins} WIN${f.redWins!==1?'S':''}</div>
-    </div>
-    <div class="series-center"><div class="series-label">BEST OF 3</div></div>
-    <div class="alliance-card blue">
-      <div class="ac-tag">BLUE ALLIANCE</div>
-      <div class="ac-teams">${f.blueAlliance.map(escapeHtml).join(' &amp; ')}</div>
-      <div class="ac-wins">${f.blueWins} WIN${f.blueWins!==1?'S':''}</div>
-    </div>
-  </div>`;
-  const pendingFinalReveal = !!(S.pendingReveal && S.pendingReveal.type==='final');
-  if(f.champion && !pendingFinalReveal){
-    const champTeams = f.champion==='red' ? f.redAlliance : f.blueAlliance;
-    html += `<div class="champion-banner">🏆 ${champTeams.map(escapeHtml).join(' &amp; ')} win the Grand Finals!</div>`;
+  if(S.finals.sixTeamBracket){
+    let html = `<div class="champion-banner">🎟️ ${S.finals.byeAlliance.map(escapeHtml).join(' &amp; ')} (#1 seed) advance directly to the Grand Finals with a bye.</div>`;
+    html += renderSeriesSection('SEMIFINAL · BEST OF 3', S.finals.semifinal, 'semi');
+    html += S.finals.final
+      ? renderSeriesSection('GRAND FINALS · BEST OF 3', S.finals.final, 'final')
+      : `<div class="finals-locked" style="padding:30px 20px;"><p style="margin-bottom:0;">The Grand Finals matchup unlocks once the semifinal is decided.</p></div>`;
+    return html;
   }
-  html += `<div class="match-grid">${f.matches.map((m,idx) => finalCardHTML(m,idx,f)).join('')}</div>`;
-  return html;
+  return renderSeriesSection('BEST OF 3', S.finals, '');
 }
 function renderAllianceSelectionUI(rankings){
   const sel = S.allianceSelection;
+  if(sel.sixTeamBracket){
+    const takenSet = new Set([sel.seed1, sel.seed2, sel.seed3, ...sel.seed2Team, ...sel.seed3Team]);
+    const available = rankings.filter(r => !takenSet.has(r.team));
+    const pickerIsSeed3 = sel.turn==='seed3';
+    const pickerName = pickerIsSeed3 ? sel.seed3 : sel.seed2;
+    return `<div class="finals-ready">
+      <h3>Alliance Selection</h3>
+      <p><b>${escapeHtml(pickerName)}</b> (seed ${pickerIsSeed3?3:2}) is picking a partner from the remaining lower-seeded teams. ${available.length} team${available.length!==1?'s':''} left to draft.</p>
+      <div class="seed-preview">
+        <div class="seed-pair gold"><span class="seed-tag">SEED 1 · BYE</span>${escapeHtml(sel.seed1)}</div>
+        <div class="seed-pair red"><span class="seed-tag">SEED 2</span>${sel.seed2Team.map(escapeHtml).join(' &amp; ')}</div>
+        <div class="seed-pair blue"><span class="seed-tag">SEED 3</span>${sel.seed3Team.map(escapeHtml).join(' &amp; ')}</div>
+      </div>
+      <div class="pick-list">
+        ${available.map(r => {
+          const idx = rankings.indexOf(r);
+          return `<button class="pick-btn" onclick="pickAlliancePartner(${idx})">${escapeHtml(r.team)} <span class="pick-rank">#${idx+1}</span></button>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
   const takenSet = new Set([...sel.redTeam, ...sel.blueTeam]);
   const available = rankings.filter(r => !takenSet.has(r.team));
   const turnCaptain = sel.turn==='red' ? sel.redCaptain : sel.blueCaptain;
@@ -1948,6 +2048,20 @@ function renderAllianceSelectionUI(rankings){
 }
 function startAllianceSelection(){
   const rankings = getRankings();
+  if(S.teams.length===6){
+    S.allianceSelection = {
+      sixTeamBracket: true,
+      seed1: rankings[0].team,
+      seed2: rankings[1].team,
+      seed3: rankings[2].team,
+      seed2Team: [rankings[1].team],
+      seed3Team: [rankings[2].team],
+      turn: 'seed3'
+    };
+    saveState();
+    renderApp();
+    return;
+  }
   S.allianceSelection = {
     redCaptain: rankings[0].team,
     blueCaptain: rankings[1].team,
@@ -1967,6 +2081,18 @@ function pickAlliancePartner(rankIdx){
   if(!sel) return;
   const rankings = getRankings();
   const team = rankings[rankIdx].team;
+  if(sel.sixTeamBracket){
+    if(sel.turn==='seed3'){
+      sel.seed3Team.push(team);
+      sel.turn = 'seed2';
+      saveState();
+      renderApp();
+    } else {
+      sel.seed2Team.push(team);
+      finalizeAllianceSelection();
+    }
+    return;
+  }
   if(sel.turn==='red') sel.redTeam.push(team);
   else sel.blueTeam.push(team);
   const takenSet = new Set([...sel.redTeam, ...sel.blueTeam]);
@@ -1981,23 +2107,53 @@ function pickAlliancePartner(rankIdx){
 }
 function finalizeAllianceSelection(){
   const sel = S.allianceSelection;
-  S.finals = {
-    redAlliance: sel.redTeam,
-    blueAlliance: sel.blueTeam,
-    matches:[
-      {matchNum:1, scored:false, redStats:blankStats(), blueStats:blankStats(), redScore:0, blueScore:0, winner:null, durationSec:null},
-      {matchNum:2, scored:false, redStats:blankStats(), blueStats:blankStats(), redScore:0, blueScore:0, winner:null, durationSec:null},
-      {matchNum:3, scored:false, redStats:blankStats(), blueStats:blankStats(), redScore:0, blueScore:0, winner:null, durationSec:null}
-    ],
-    redWins:0, blueWins:0, champion:null
-  };
+  if(sel.sixTeamBracket){
+    const takenSet = new Set([sel.seed1, sel.seed2, sel.seed3, ...sel.seed2Team, ...sel.seed3Team]);
+    const byePartner = S.teams.filter(t => !takenSet.has(t));
+    S.finals = {
+      sixTeamBracket: true,
+      byeAlliance: [sel.seed1, ...byePartner],
+      semifinal: blankFinalSeries(sel.seed2Team, sel.seed3Team),
+      final: null
+    };
+  } else {
+    S.finals = blankFinalSeries(sel.redTeam, sel.blueTeam);
+  }
   S.allianceSelection = null;
   S.activeTab = 'finals';
   saveState();
   renderApp();
 }
-function updateFinalsProgress(){
-  const f = S.finals;
+function blankFinalMatch(num){
+  return {matchNum:num, scored:false, redStats:blankStats(), blueStats:blankStats(), redScore:0, blueScore:0, winner:null, durationSec:null};
+}
+function blankFinalSeries(redAlliance, blueAlliance){
+  return {redAlliance, blueAlliance, matches:[blankFinalMatch(1), blankFinalMatch(2), blankFinalMatch(3)], redWins:0, blueWins:0, champion:null};
+}
+// Resolves which best-of-3 series a finals match belongs to. For the normal 2-alliance format
+// S.finals IS the series. For the 6-team bracket, S.finals wraps two series (semifinal/final)
+// and `round` ('semi'|'final') picks between them.
+function resolveSeries(round){
+  if(!S.finals) return null;
+  if(S.finals.sixTeamBracket) return round==='final' ? S.finals.final : S.finals.semifinal;
+  return S.finals;
+}
+function allFinalsMatches(){
+  if(!S.finals) return [];
+  if(S.finals.sixTeamBracket) return [...S.finals.semifinal.matches, ...(S.finals.final ? S.finals.final.matches : [])];
+  return S.finals.matches;
+}
+// Once the 6-team bracket's semifinal has a champion, creates the Grand Finals series
+// (bye alliance vs semifinal winner). No-op otherwise, so it's safe to call after every score change.
+function checkBracketAdvance(){
+  if(!S.finals || !S.finals.sixTeamBracket) return;
+  const semi = S.finals.semifinal;
+  if(semi.champion && !S.finals.final){
+    const winnerAlliance = semi.champion==='red' ? semi.redAlliance : semi.blueAlliance;
+    S.finals.final = blankFinalSeries(S.finals.byeAlliance, winnerAlliance);
+  }
+}
+function updateFinalsProgress(f){
   let redWins=0, blueWins=0;
   f.matches.forEach(m => {
     if(m.scored){
@@ -2012,7 +2168,7 @@ function updateFinalsProgress(){
     f.champion = null;
     const unscored = f.matches.filter(m => !m.scored);
     if(unscored.length===0){
-      f.matches.push({matchNum:f.matches.length+1, scored:false, redStats:blankStats(), blueStats:blankStats(), redScore:0, blueScore:0, winner:null, durationSec:null});
+      f.matches.push(blankFinalMatch(f.matches.length+1));
     }
   }
 }
@@ -2030,18 +2186,20 @@ function statRow(label, side, field, max, val){
   </div>`;
 }
 function renderModal(){
-  const {type, index} = S.scoringMatch;
+  const {type, index, round} = S.scoringMatch;
   let match, redTeams, blueTeams, isFinal;
   if(type==='qual'){
     match = S.qualMatches[index]; redTeams = match.red; blueTeams = match.blue; isFinal = false;
   } else {
-    match = S.finals.matches[index]; redTeams = S.finals.redAlliance; blueTeams = S.finals.blueAlliance; isFinal = true;
+    const series = resolveSeries(round);
+    match = series.matches[index]; redTeams = series.redAlliance; blueTeams = series.blueAlliance; isFinal = true;
   }
+  const finalLabel = (S.finals && S.finals.sixTeamBracket && round==='semi') ? 'Semifinal' : 'Grand Finals';
   return `
   <div class="modal-overlay" onclick="closeScoreModal()">
     <div class="modal-box" onclick="event.stopPropagation()">
       <div class="modal-head">
-        <h3>${isFinal ? 'Grand Finals — Match '+match.matchNum : 'Match '+match.matchNum}</h3>
+        <h3>${isFinal ? finalLabel+' — Match '+match.matchNum : 'Match '+match.matchNum}</h3>
         <button class="modal-close" onclick="closeScoreModal()">&times;</button>
       </div>
       <div class="modal-alliances">
@@ -2090,7 +2248,7 @@ function renderModal(){
     </div>
   </div>`;
 }
-function openScoreModal(type, index){ S.scoringMatch = {type, index}; renderApp(); }
+function openScoreModal(type, index, round){ S.scoringMatch = {type, index, round: round||''}; renderApp(); }
 function closeScoreModal(){ S.scoringMatch = null; renderApp(); }
 
 function stepStat(side, field, delta, max){
@@ -2133,7 +2291,7 @@ function clearScore(){
   updateModalPreview();
 }
 function saveScore(){
-  const {type, index} = S.scoringMatch;
+  const {type, index, round} = S.scoringMatch;
   const redStats = readStatsFromDOM('red');
   const blueStats = readStatsFromDOM('blue');
   if(type==='qual'){
@@ -2147,30 +2305,34 @@ function saveScore(){
     match.redRP = result.redRP; match.blueRP = result.blueRP;
     match.scored = true;
   } else {
-    const match = S.finals.matches[index];
+    const series = resolveSeries(round);
+    const match = series.matches[index];
     const redScore = allianceScore(redStats);
     const blueScore = allianceScore(blueStats);
     match.redStats = redStats; match.blueStats = blueStats;
     match.redScore = redScore; match.blueScore = blueScore;
     match.scored = true;
     match.winner = redScore>blueScore ? 'red' : (blueScore>redScore ? 'blue' : 'tie');
-    updateFinalsProgress();
+    updateFinalsProgress(series);
+    checkBracketAdvance();
   }
   S.scoringMatch = null;
   renderApp();
 }
-function rescoreMatch(type, index){
+function rescoreMatch(type, index, round){
   if(type==='qual'){
     const m = S.qualMatches[index];
     const result = computeScoreAndRP(m.redStats, m.blueStats, m.powerShare, m.doubleClimb);
     m.redScore = result.redScore; m.blueScore = result.blueScore;
     m.redRP = result.redRP; m.blueRP = result.blueRP;
   } else {
-    const m = S.finals.matches[index];
+    const series = resolveSeries(round);
+    const m = series.matches[index];
     m.redScore = allianceScore(m.redStats);
     m.blueScore = allianceScore(m.blueStats);
     m.winner = m.redScore>m.blueScore ? 'red' : (m.blueScore>m.redScore ? 'blue' : 'tie');
-    updateFinalsProgress();
+    updateFinalsProgress(series);
+    checkBracketAdvance();
   }
   renderApp();
 }
@@ -2185,15 +2347,21 @@ function rescoreAllMatches(){
     }
   });
   if(S.finals){
-    S.finals.matches.forEach(m => {
-      if(m.scored){
-        m.redScore = allianceScore(m.redStats);
-        m.blueScore = allianceScore(m.blueStats);
-        m.winner = m.redScore>m.blueScore ? 'red' : (m.blueScore>m.redScore ? 'blue' : 'tie');
-        count++;
-      }
+    const seriesList = S.finals.sixTeamBracket
+      ? [S.finals.semifinal, S.finals.final].filter(Boolean)
+      : [S.finals];
+    seriesList.forEach(series => {
+      series.matches.forEach(m => {
+        if(m.scored){
+          m.redScore = allianceScore(m.redStats);
+          m.blueScore = allianceScore(m.blueStats);
+          m.winner = m.redScore>m.blueScore ? 'red' : (m.blueScore>m.redScore ? 'blue' : 'tie');
+          count++;
+        }
+      });
+      updateFinalsProgress(series);
     });
-    updateFinalsProgress();
+    checkBracketAdvance();
   }
   renderApp();
 }
@@ -2406,17 +2574,20 @@ const liveStatFields = [
 ];
 function getLiveMatch(){
   if(!live) return null;
-  return live.type==='qual' ? S.qualMatches[live.index] : S.finals.matches[live.index];
+  if(live.type==='qual') return S.qualMatches[live.index];
+  const series = resolveSeries(live.round);
+  return series ? series.matches[live.index] : null;
 }
 function getLiveTeams(){
   const m = getLiveMatch();
   if(live.type==='qual') return {red:m.red, blue:m.blue};
-  return {red:S.finals.redAlliance, blue:S.finals.blueAlliance};
+  const series = resolveSeries(live.round);
+  return {red:series.redAlliance, blue:series.blueAlliance};
 }
-function openLive(type, index){
+function openLive(type, index, round){
   const durationSec = (S.matchConfig && S.matchConfig.durationSec) || 120;
   const sessionId = getCloudEventId();
-  live = {type, index, phase:'idle', elapsedSec:0, startTs:null, countdownVal:3, timerHandle:null, countdownHandle:null, durationSec, autoEnded:false, lastFinalCountdown:null, warn30Played:false, sessionId};
+  live = {type, index, round: round||'', phase:'idle', elapsedSec:0, startTs:null, countdownVal:3, timerHandle:null, countdownHandle:null, durationSec, autoEnded:false, lastFinalCountdown:null, warn30Played:false, sessionId};
   liveFirstRender = true;
   fbCreateSession(sessionId, getLiveMatch(), getLiveTeams(), durationSec);
   fbSubscribe(sessionId);
@@ -2477,7 +2648,8 @@ function renderLive(){
   const m = getLiveMatch();
   const isFinal = live.type==='final';
   const teams = getLiveTeams();
-  const label = isFinal ? 'GRAND FINALS · MATCH '+m.matchNum : 'MATCH '+m.matchNum;
+  const bracketLabel = (S.finals && S.finals.sixTeamBracket && live.round==='semi') ? 'SEMIFINAL' : 'GRAND FINALS';
+  const label = isFinal ? bracketLabel+' · MATCH '+m.matchNum : 'MATCH '+m.matchNum;
 
   const redScore = allianceScore(m.redStats);
   const blueScore = allianceScore(m.blueStats);
@@ -2664,14 +2836,17 @@ function confirmFinalScore(){
   const isFinal = live.type==='final';
   const liveType = live.type;
   const liveIndex = live.index;
+  const liveRound = live.round||'';
   const rankingsBefore = isFinal ? null : getRankings();
   if(isFinal){
+    const series = resolveSeries(liveRound);
     const redScore = allianceScore(m.redStats);
     const blueScore = allianceScore(m.blueStats);
     m.redScore = redScore; m.blueScore = blueScore;
     m.scored = true;
     m.winner = redScore>blueScore ? 'red' : (blueScore>redScore ? 'blue' : 'tie');
-    updateFinalsProgress();
+    updateFinalsProgress(series);
+    checkBracketAdvance();
   } else {
     const result = computeScoreAndRP(m.redStats, m.blueStats, m.powerShare||false, m.doubleClimb||false);
     m.redScore = result.redScore; m.blueScore = result.blueScore;
@@ -2680,7 +2855,7 @@ function confirmFinalScore(){
     m.winner = result.redScore>result.blueScore ? 'red' : (result.blueScore>result.redScore ? 'blue' : 'tie');
   }
   const rankingsAfter = isFinal ? null : getRankings();
-  S.pendingReveal = {type:liveType, index:liveIndex, rankingsBefore, rankingsAfter};
+  S.pendingReveal = {type:liveType, index:liveIndex, round:liveRound, rankingsBefore, rankingsAfter};
   saveState();
   closeLive();
 }
@@ -2867,7 +3042,9 @@ function renderRevealContent(m, teams, isFinal, pr){
   if(!contentEl) return;
   const winner = m.winner;
   const winnerTeams = winner==='tie' ? null : (winner==='red' ? teams.red : teams.blue);
-  const isChampionship = isFinal && !!(S.finals && S.finals.champion && S.finals.champion===winner);
+  const revealSeries = isFinal ? resolveSeries(pr.round) : null;
+  // Only the Grand Finals round (not a 6-team bracket's semifinal) gets the championship cinematic.
+  const isChampionship = isFinal && !!(revealSeries && revealSeries.champion && revealSeries.champion===winner) && (!S.finals.sixTeamBracket || pr.round==='final');
   const rankChangesHTML = !isFinal ? buildRankChangesHTML(teams, pr) : '';
 
   contentEl.innerHTML = `
@@ -3034,11 +3211,12 @@ function triggerCloseGameTension(overlay){
 function openResultReveal(){
   const pr = S.pendingReveal;
   if(!pr) return;
-  const m = pr.type==='qual' ? S.qualMatches[pr.index] : (S.finals ? S.finals.matches[pr.index] : null);
-  if(!m) return;
   const isFinal = pr.type==='final';
-  const teams = isFinal ? {red:S.finals.redAlliance, blue:S.finals.blueAlliance} : {red:m.red, blue:m.blue};
-  const isChampionship = isFinal && !!(S.finals && S.finals.champion && S.finals.champion===m.winner);
+  const revealSeries = isFinal ? resolveSeries(pr.round) : null;
+  const m = pr.type==='qual' ? S.qualMatches[pr.index] : (revealSeries ? revealSeries.matches[pr.index] : null);
+  if(!m) return;
+  const teams = isFinal ? {red:revealSeries.redAlliance, blue:revealSeries.blueAlliance} : {red:m.red, blue:m.blue};
+  const isChampionship = isFinal && !!(revealSeries && revealSeries.champion && revealSeries.champion===m.winner) && (!S.finals.sixTeamBracket || pr.round==='final');
   const root = document.getElementById('revealRoot');
   if(!root) return;
   const colorClass = m.winner==='tie' ? 'gold' : m.winner;
@@ -3143,8 +3321,9 @@ function fbSessionRef(sessionId){
 }
 function fbCreateSession(sessionId, m, teams, durationSec){
   if(!fbEnabled) return;
+  const bracketLabel = (S.finals && S.finals.sixTeamBracket && live.round==='semi') ? 'SEMIFINAL' : 'GRAND FINALS';
   fbSessionRef(sessionId).set({
-    matchLabel: (live.type==='final' ? 'GRAND FINALS · MATCH ' : 'MATCH ') + m.matchNum,
+    matchLabel: (live.type==='final' ? bracketLabel+' · MATCH ' : 'MATCH ') + m.matchNum,
     isFinal: live.type==='final',
     redTeams: teams.red, blueTeams: teams.blue,
     phase: 'idle', durationSec: durationSec||0,
